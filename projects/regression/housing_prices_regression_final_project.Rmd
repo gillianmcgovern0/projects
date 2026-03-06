@@ -1,0 +1,1733 @@
+---
+title: "DATA 622 Final Project"
+author: "Gillian McGovern"
+date: "2025-12-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Background
+
+1.	Choose a dataset
+You get to decide which dataset you want to work on. The data set must be different from the ones used in previous homeworks You can work on a problem from your job, or something you are interested in. You may also obtain a dataset from sites such as Kaggle, Data.Gov, Census Bureau, USGS or other open data portals. 
+2.	Select one of the methodologies studied in weeks 1-10, and another methodology from weeks 11-15 to apply in the new dataset selected.
+3.	To complete this task:. 
+	
+a.	Describe the problem you are trying to solve.
+b.	Describe your datases and what you did to prepare the data for analysis. 
+c.	Methodologies you used for analyzing the data
+d.	What's the purpose of the analysis performed
+e.	Make your conclusions from your analysis. Please be sure to address the business impact (it could be of any domain) of your solution.
+
+### Dataset Overview
+
+The dataset I chose is Kaggle's "House Prices - Advanced Regression Techniques" competition dataset which includes features of residential homes in Ames, Iowa. The purpose of this dataset is to predict the final price of each home. This dataset consists of a training dataset and a test dataset (one that does not have the target variable).
+
+The reason I chose this dataset is that this is a classic regression problem example in machine learning. Additionally, this has many more features than what we've previously worked with, which I would imagine would happen in the real world as well. I also wanted to work with the random forest algorithm, and compare to neural network (an algorithm I haven't tried yet), and this type of data consisting of both categorical and numeric features seemed like a great option to do that comparison. This dataset gave a lot of practice of preparing and doing extensive EDA which takes up a good portion of data science. Lastly, using real estate data genuinely seemed interesting, so it seemed like the prefect problem to solve.
+
+Kaggle link: https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/overview
+
+Housing features:
+
+SalePrice - the property's sale price in dollars. This is the target variable that you're trying to predict.
+MSSubClass: The building class
+MSZoning: The general zoning classification
+LotFrontage: Linear feet of street connected to property
+LotArea: Lot size in square feet
+Street: Type of road access
+Alley: Type of alley access
+LotShape: General shape of property
+LandContour: Flatness of the property
+Utilities: Type of utilities available
+LotConfig: Lot configuration
+LandSlope: Slope of property
+Neighborhood: Physical locations within Ames city limits
+Condition1: Proximity to main road or railroad
+Condition2: Proximity to main road or railroad (if a second is present)
+BldgType: Type of dwelling
+HouseStyle: Style of dwelling
+OverallQual: Overall material and finish quality
+OverallCond: Overall condition rating
+YearBuilt: Original construction date
+YearRemodAdd: Remodel date
+RoofStyle: Type of roof
+RoofMatl: Roof material
+Exterior1st: Exterior covering on house
+Exterior2nd: Exterior covering on house (if more than one material)
+MasVnrType: Masonry veneer type
+MasVnrArea: Masonry veneer area in square feet
+ExterQual: Exterior material quality
+ExterCond: Present condition of the material on the exterior
+Foundation: Type of foundation
+BsmtQual: Height of the basement
+BsmtCond: General condition of the basement
+BsmtExposure: Walkout or garden level basement walls
+BsmtFinType1: Quality of basement finished area
+BsmtFinSF1: Type 1 finished square feet
+BsmtFinType2: Quality of second finished area (if present)
+BsmtFinSF2: Type 2 finished square feet
+BsmtUnfSF: Unfinished square feet of basement area
+TotalBsmtSF: Total square feet of basement area
+Heating: Type of heating
+HeatingQC: Heating quality and condition
+CentralAir: Central air conditioning
+Electrical: Electrical system
+1stFlrSF: First Floor square feet
+2ndFlrSF: Second floor square feet
+LowQualFinSF: Low quality finished square feet (all floors)
+GrLivArea: Above grade (ground) living area square feet
+BsmtFullBath: Basement full bathrooms
+BsmtHalfBath: Basement half bathrooms
+FullBath: Full bathrooms above grade
+HalfBath: Half baths above grade
+Bedroom: Number of bedrooms above basement level
+Kitchen: Number of kitchens
+KitchenQual: Kitchen quality
+TotRmsAbvGrd: Total rooms above grade (does not include bathrooms)
+Functional: Home functionality rating
+Fireplaces: Number of fireplaces
+FireplaceQu: Fireplace quality
+GarageType: Garage location
+GarageYrBlt: Year garage was built
+GarageFinish: Interior finish of the garage
+GarageCars: Size of garage in car capacity
+GarageArea: Size of garage in square feet
+GarageQual: Garage quality
+GarageCond: Garage condition
+PavedDrive: Paved driveway
+WoodDeckSF: Wood deck area in square feet
+OpenPorchSF: Open porch area in square feet
+EnclosedPorch: Enclosed porch area in square feet
+3SsnPorch: Three season porch area in square feet
+ScreenPorch: Screen porch area in square feet
+PoolArea: Pool area in square feet
+PoolQC: Pool quality
+Fence: Fence quality
+MiscFeature: Miscellaneous feature not covered in other categories
+MiscVal: $Value of miscellaneous feature
+MoSold: Month Sold
+YrSold: Year Sold
+SaleType: Type of sale
+SaleCondition: Condition of sale
+
+
+### Business Goal
+
+The business goal of this project is to predict the sale price for each house. For a real estate agency listing houses, this is important for setting up realistic, competitive prices of homes in real-time. For a home buyer, it's critical to know the real value of the home when negotiating price. The data science goal is to perform EDA and experiment with models that could fit this dataset to solve a classic machine learning regression problem (solving for sale price variable).
+
+### 1. Importing Libraries
+
+```{r libraries, warning=FALSE, message=FALSE}
+#Import Libraries
+library(kableExtra)
+library(knitr)
+library(readr)
+library(tidyverse)
+library(corrplot)
+library(dplyr)
+library(GGally)
+library(caret)
+library(pROC)
+library(glmnet)
+library(MASS)
+library(car)
+library(correlationfunnel)
+library(faraway)
+library(arm)
+library(performance)
+library(see)
+library(reshape2)
+library(readr)
+#library(tidymodels)
+#library(rms)
+library(smotefamily)
+library(themis)
+library(skimr)
+library(DataExplorer)
+library(naniar)
+library(mice)
+library(corrr)
+library(FactoMineR)
+library(ggcorrplot)
+library(factoextra)
+library(ranger)
+library(neuralnet)
+library(tidymodels)
+library(reshape2)
+library(gmodels)
+```
+
+### 2. Data Ingestion
+
+To obtain the dataset, I enrolled in the ongoing Kaggle competition and downloaded the data.
+
+```{r}
+# Read in the training dataset (downloaded from Kaggle)
+raw_data <- read.csv("/Users/gillianmcgovern/Documents/CUNY/DATA_622/FINAL\ PROJECT/final_project_train.csv")
+```
+
+### 3. Exploratory Data Analysis
+
+The housing prices training dataset contains 1,460 observations and 81 variables, where each observation is a house with it's features and final sale price (SalePrice is the target variable name). This dataset contains both categorical and numeric/continuous variables, with some ordinal variables and nominal as well.
+
+Missing data:
+
+0% complete rows.
+Given the 0% complete rows, there are only 5.9% total missing observations.
+
+The missing data breakdown bar chart shows that Electrical, MasVnrType, MasVnrArea, BsmtFinType1, BsmtCond, BsmtQual, BsmtFinType2, BsmtExposure, GarageCond, GarageQual, GarageFinish, GarageYrBlt, GarageType, LotFrontage, FireplaceQu, Fence, Alley, MiscFeature, and PoolQC have missing values. Fence, Alley, MiscFeature, and PoolQC have the most missing values, with a missing percentage above 80%. We will have to look into these missing values to check if they are indeed missing, and if we should keep them.
+
+The missing upset plot shows that Fence, Alley, MiscFeature, and PoolQC are usually all missing together.
+
+Duplicate data:
+
+There are no duplicate observations.
+
+Invalid data:
+
+It appears all the values for the categorical features are valid as well (i.e. no special characters need cleaning).
+
+Summary statistics:
+
+Summary statistics of the predictor variables in the training dataset are included in the table below. Key metrics such as minimum, maximum, mean, median, and standard deviation (SD) help us understand the range, central tendency, and variability of each variable.
+
+Some interesting things to note right from the start are:
+
+* The oldest house in this dataset is 1872 and the newest house is 2010 (YearBuilt)
+* The least expensive house is 34,900 and the most expensive house is 755,00
+
+NOTE: YrSold, MoSold, SaleType, SaleCondition will all be kept for this model since the test dataset given for this competition contains these features, so this is assuming we do have this information to predict the final price of the house. Depending on the timing of making these final price predictions, knowing this information might not be available in a real-world scenario (in which case these features would be removed before training a model). The competition does not mention this information is not available to us for prediction.
+
+```{r, fig.width=10, fig.height=10}
+# Structure of the data 
+str(raw_data)
+
+# Glimpse of the data
+head(raw_data)
+
+# Id doesn't impact prediction so remove 
+raw_data <- raw_data[ , -1]
+
+# Summary statistics
+raw_data %>%
+  summary() %>%
+  kable(caption = "Descriptive Statistics of Predictor Variables") %>%
+  kable_styling()
+plot_intro(raw_data)
+
+# Visualize Missing Data
+plot_missing(raw_data)
+# Check how missingness relates to other variables
+gg_miss_upset(raw_data, nsets = 10)
+# Check how missingness affects SalePrice
+gg_miss_fct(x = raw_data, fct = SalePrice)
+
+# Check for duplicates
+duplicates <- duplicated(raw_data)
+
+# Print the duplicates
+print(raw_data[duplicates, ])
+```
+
+```{r}
+# Break up numerical and categorical variables
+cat("Numerical predictors:")
+data_raw_numeric <- raw_data |>
+  dplyr::select(where(is.numeric))
+numerical_predictors <- names(data_raw_numeric)
+print(numerical_predictors)
+
+cat("\nCategorical predictors:")
+data_raw_categorical <- raw_data |>
+  dplyr::select(where(is.factor) | where(is.character))
+categorical_predictors <- names(data_raw_categorical)[names(data_raw_categorical) != "y"]
+print(categorical_predictors)
+```
+
+
+```{r}
+# Check for any typos in categorical features values
+data_raw_categorical %>%
+  lapply(unique) %>%
+  print()
+```
+
+#### 3.1 Data Cleaning
+
+We should convert each categorical feature into a factor to be better used with R. Note: I decided GarageType as nominal feature, since it doesn't really have an order.
+
+After taking a closer look at the metadata file, Alley, BsmtQual, BsmtCond, BsmtExposure, BsmtFinType1, BsmtFinType2, FireplaceQu, GarageType, GarageFinish, GarageQual, GarageCond, PoolQC, Fence, MiscFeature all have an "NA" category which actually means it doesn't contain the item related to the predictor. For example, an NA value for GarageType actually means "No Garage". This is actually an informative categorical value, and shouldn't be treated as missing data.
+
+To clean the data, let's convert these NA values to their actual categorical value.
+
+After cleaning up the data, the remaining missing predictors are Electrical, MasVnrType, MasVnrArea, GarageYrBlt, LotFrontage.
+
+As we can see above, GarageYrBlt indicates "No Garage". For GarageYrBlt, let's replace NA with 0, and use the existing GarageType categorical variable that already indicates if there's not a Garage present.
+
+MasVnrType, MasVnrArea, and LotFrontage seem genuinely missing according to the metadata file. After looking at other predictor values when LotFrontage is NA, it seems like for many different predictors and their values, LotFrontage is missing (aka LotFrontage missing doesn't seem to indicate some sort of informative feature of the house). So it's not like LotFrontage is only missing when Condition1 == "PosN" for example. Therefore, imputation will probably be used for these variables.
+
+```{r, fig.width=5, fig.height=15}
+# Convert categorical to factors
+
+raw_data$MSSubClass <- as.factor(raw_data$MSSubClass) # this is a sneaky categorical variable that needs to be a factor (nominal)
+
+# Create new categories if the house feature doesn't exist, such as "No Garage"
+raw_data$Alley =  ifelse(is.na(raw_data$Alley), "NoAlley", raw_data$Alley)
+raw_data$BsmtQual =  ifelse(is.na(raw_data$BsmtQual), "NoBasement", raw_data$BsmtQual)
+raw_data$BsmtCond =  ifelse(is.na(raw_data$BsmtCond), "NoBasement", raw_data$BsmtCond)
+raw_data$BsmtExposure =  ifelse(is.na(raw_data$BsmtExposure), "NoBasement", raw_data$BsmtExposure)
+raw_data$BsmtFinType1 =  ifelse(is.na(raw_data$BsmtFinType1), "NoBasement", raw_data$BsmtFinType1)
+raw_data$BsmtFinType2 =  ifelse(is.na(raw_data$BsmtFinType2), "NoBasement", raw_data$BsmtFinType2)
+raw_data$FireplaceQu =  ifelse(is.na(raw_data$FireplaceQu), "NoFireplace", raw_data$FireplaceQu)
+raw_data$GarageType =  ifelse(is.na(raw_data$GarageType), "NoGarage", raw_data$GarageType)
+raw_data$GarageFinish =  ifelse(is.na(raw_data$GarageFinish), "NoGarage", raw_data$GarageFinish)
+raw_data$GarageQual =  ifelse(is.na(raw_data$GarageQual), "NoGarage", raw_data$GarageQual)
+raw_data$GarageCond =  ifelse(is.na(raw_data$GarageCond), "NoGarage", raw_data$GarageCond)
+raw_data$PoolQC =  ifelse(is.na(raw_data$PoolQC), "NoPool", raw_data$PoolQC)
+raw_data$Fence =  ifelse(is.na(raw_data$Fence), "NoFence", raw_data$Fence)
+raw_data$MiscFeature =  ifelse(is.na(raw_data$MiscFeature), "None", raw_data$MiscFeature)
+
+# Update ordinal features
+raw_data$Fence <- factor(
+  raw_data$Fence,
+  levels = c("NoFence", "MnWw", "GdWo", "MnPrv", "GdPrv"),
+  ordered = TRUE
+)
+raw_data$PoolQC <- factor(
+  raw_data$PoolQC,
+  levels = c("NoPool", "Fa", "TA", "Gd", "Ex"),
+  ordered = TRUE
+)
+raw_data$GarageCond <- factor(
+  raw_data$GarageCond,
+  levels = c("NoGarage", "Po", "Fa", "TA", "Gd", "Ex"),
+  ordered = TRUE
+)
+raw_data$GarageQual <- factor(
+  raw_data$GarageQual,
+  levels = c("NoGarage", "Po", "Fa", "TA", "Gd", "Ex"),
+  ordered = TRUE
+)
+raw_data$GarageFinish <- factor(
+  raw_data$GarageFinish,
+  levels = c("NoGarage", "Unf", "RFn", "Fin"),
+  ordered = TRUE
+)
+raw_data$FireplaceQu <- factor(
+  raw_data$FireplaceQu,
+  levels = c("NoFireplace", "Po", "Fa", "TA", "Gd", "Ex"),
+  ordered = TRUE
+)
+raw_data$Functional <- factor(
+  raw_data$Functional,
+  levels = c("Sal", "Sev", "Maj2", "Maj1", "Mod", "Min2", "Min1", "Typ"),
+  ordered = TRUE
+)
+raw_data$KitchenQual <- factor(
+  raw_data$KitchenQual,
+  levels = c("Po", "Fa", "TA", "Gd", "Ex"),
+  ordered = TRUE
+)
+raw_data$HeatingQC <- factor(
+  raw_data$HeatingQC,
+  levels = c("Po", "Fa", "TA", "Gd", "Ex"),
+  ordered = TRUE
+)
+raw_data$BsmtFinType2 <- factor(
+  raw_data$BsmtFinType2,
+  levels = c("NoBasement", "Unf", "LwQ", "Rec", "BLQ", "ALQ", "GLQ"),
+  ordered = TRUE
+)
+raw_data$BsmtFinType1 <- factor(
+  raw_data$BsmtFinType1,
+  levels = c("NoBasement", "Unf", "LwQ", "Rec", "BLQ", "ALQ", "GLQ"),
+  ordered = TRUE
+)
+raw_data$BsmtExposure <- factor(
+  raw_data$BsmtExposure,
+  levels = c("NoBasement", "No", "Mn", "Av", "Gd"),
+  ordered = TRUE
+)
+raw_data$BsmtCond <- factor(
+  raw_data$BsmtCond,
+  levels = c("NoBasement", "Po", "Fa", "TA", "Gd", "Ex"),
+  ordered = TRUE
+)
+raw_data$BsmtQual <- factor(
+  raw_data$BsmtQual,
+  levels = c("NoBasement", "Po", "Fa", "TA", "Gd", "Ex"),
+  ordered = TRUE
+)
+raw_data$ExterCond <- factor(
+  raw_data$ExterCond,
+  levels = c("Po", "Fa", "TA", "Gd", "Ex"),
+  ordered = TRUE
+)
+raw_data$ExterQual <- factor(
+  raw_data$ExterQual,
+  levels = c("Po", "Fa", "TA", "Gd", "Ex"),
+  ordered = TRUE
+)
+raw_data$LandSlope <- factor(
+  raw_data$LandSlope,
+  levels = c("Sev", "Mod", "Gtl"),
+  ordered = TRUE
+)
+
+# Update nominal features
+# treat 1-10 ratings as ordered numeric
+nominal_features <- c("SaleCondition", "SaleType", "MiscFeature", "PavedDrive", "GarageType", "CentralAir", "Heating", "Foundation", "Exterior2nd", "Exterior1st", "RoofMatl", "RoofStyle", "HouseStyle", "BldgType", "Condition2", "Condition1", "Neighborhood", "LotConfig", "Utilities", "LandContour", "LotShape", "Alley", "Street", "MSZoning") 
+raw_data <- update_columns(raw_data, nominal_features, as.factor)
+
+# Visualize Missing Data
+plot_missing(raw_data)
+# Check how missingness relates to other variables
+gg_miss_upset(raw_data, nsets = 10)
+# Does a missing LotFrontage indicate anything?
+# Focus on other predictor variable values when this value is NA
+gg_miss_fct(x = raw_data, fct = Condition1)
+gg_miss_fct(x = raw_data, fct = Alley)
+gg_miss_fct(x = raw_data, fct = Neighborhood)
+gg_miss_fct(x = raw_data, fct = LotConfig)
+gg_miss_fct(x = raw_data, fct = BldgType)
+gg_miss_fct(x = raw_data, fct = Street)
+```
+
+```{r}
+# Replace NA with 0 for GarageYrBlt and use the existing Garage missing indicator categorical variables
+raw_data$GarageYrBlt =  ifelse(is.na(raw_data$GarageYrBlt), 0, raw_data$GarageYrBlt)
+
+
+# Keep year as numeric and convert month to factor
+# raw_data$YrSold <- as.factor(raw_data$YrSold)
+raw_data$MoSold <- as.factor(raw_data$MoSold)
+# raw_data$GarageYrBlt <- as.factor(raw_data$GarageYrBlt)
+# raw_data$YearBuilt <- as.factor(raw_data$YearBuilt)
+# raw_data$YearRemodAdd <- as.factor(raw_data$YearRemodAdd)
+```
+
+
+#### 3.3 Data Distribution
+
+SalePrice is right skewed and has a wide spread.
+
+Most numerical predictors are at least slightly right skewed except for OverallCond, YearBuilt, YearRemodAdd, and GarageYrBlt.
+
+Most numerical predictors are unimodal except for BsmtFinSF1 (bimodal), BsmtUnfSF (multimodal), MSSubClass (multimodal), TotalBsmtSF (bimodal), X2ndFirSF (bimodal), YearBuilt (multimodal), YearRemodAdd (multimodal), GarageArea (multimodal), OpenPorchSF (multimodal), WoodDeckSF (bimodal), and YrSold (bimodal).
+
+As we saw earlier, predictors have a wide range of spread. For example, GarageArea has a very large spread compared to FullBath which has a very small spread.
+
+For categorical predictors, some things to note:
+
+* 1-STORY 1946 & NEWER ALL STYLES is the most frequent type of dwelling
+* RL (Residential Low Density) has the highest frequency for general zoning classification
+* Most streets are paved
+* Most houses have no alley
+* Most slopes are gentile
+* Most flatness is near flat/level
+* Condition 1 and 2 are mostly normal
+* Most houses are single family
+* Most roof style is gable
+* Most roof material is standard (composite) shingle
+* Most present condition of the material on the exterior is typical
+* Most have gas appliances
+* Most do not have basement exposure to walkout or garden level walls
+* Spring is the most frequent month houses are sold
+
+There are some features that barely have counts for some categories such as Condition1 and 2 (PosA barely has any count value), RoofMatl and RoofStyle. It's possible some values can be narrowed down by grouping values into "other" category (depending on the model).
+
+The QQ plots and the box plots show the skew shown in the histograms (many extreme values). Many predictor variables have outliers shown by the red dots. However, based on the feature meanings and provided information, there is no reason to believe that any of these extreme values are mistakes or data errors. As such, we will not remove the extreme values, as they could be predictive of the target.
+
+It seems like for smaller housing prices, there is a wider spread and more outliers, but this makes sense since that's a bulk of the data. January and July have the widest spread for SalePrice. Housing prices increases as the year the house was built becomes more recent, including remodel date. Generally as SF increases, the price increases as well.
+
+```{r}
+# Plot histograms
+plot_histogram(raw_data)
+
+# Categorical Variables
+data_raw_categorical <- raw_data |>
+  dplyr::select(where(is.factor) | where(is.character))
+categorical_predictors <- names(data_raw_categorical)[names(data_raw_categorical) != "y"]
+plot_bar(data_raw_categorical)
+
+# Closer look at target distribution (# of orders)
+hist(as.numeric(raw_data$SalePrice), main="SalePrice Distribution",
+     xlab="Sale Price", col="lightblue", breaks=100)
+
+# QQ Plot
+plot_qq(raw_data, sampled_rows = 1000L)
+
+# Box plots - visualize outliers
+ggplot(stack(data_raw_numeric), aes(x = ind, y = values)) + 
+  geom_boxplot(color = 'skyblue', outlier.color = 'red') +
+  coord_cartesian(ylim = c(0, 10000)) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.background = element_rect(fill = 'grey96')) +
+  labs(title = "Boxplots of Predictor Variables", x="Predictors")
+
+# Box plots by TARGET
+plot_boxplot(raw_data, by = "SalePrice", ggtheme = theme_light())
+
+# Scatter plots by TARGET
+plot_scatterplot(raw_data, by = "SalePrice", sampled_rows = 1000L)
+```
+
+
+#### 3.4 Identifying Correlations and Relationships
+
+Top positive correlations with SalePrice (full list printed below):
+
+1. OverallQual: 0.79 (better quality means the house is worth more)
+2. GrLivArea: 0.71 (Larger living area, the higher the price)
+3. GarageCars: 0.64 (Larger the garage space (and the more cars owned presumably), the higher the price)
+4. GarageArea: 0.62 (Larger the garage space (and the more cars owned presumably), the higher the price)
+5. TotalBsmtSF: 0.61 (Larger basement, the higher the price)
+
+Top negative correlations with SalePrice:
+
+1. KitchenAbvGr: -0.14 (Higher number of kitchens located on the above-ground floors of a house, lower the price -- interesting!)
+2. EnclosedPorch: -0.13 (Higher enclosed porch area in square feet, lower the price)
+3. OverallCond: -0.08 (Higher overall condition rating, lower the price -- this does not make sense, and needs looking into.)
+4. YrSold: -0.03 (Higher overall condition rating, lower the price -- this does not make sense, and needs looking into.)
+5. LowQualFinSF: -0.02 (Higher overall condition rating, lower the price -- this does not make sense, and needs looking into.)
+
+There are many more features that are strongly positively correlated with SalePrice than negatively correlated.
+
+Top correlation Among Predictors:
+
+1. GarageCars <-> GarageArea: 0.88 (More cars, the larger the garage)
+2. GrLivArea <-> TotRmsAbvGrd: 0.83 (Higher above grade (ground) living area square feet, more total rooms above grade)
+3. TotalBsmtSF <-> X1stFlrSF: 0.82 (Higher total basement square feet, higher first floor square feet - share the same or similar floor plan dimensions/area)
+4. X2ndFlrSF <-> GrLivArea: 0.69 (Larger 2nd floor usually means larger living area)
+5. BedroomAbvGr <-> TotRmsAbvGrd: 0.68 (More bedrooms, usually more rooms in total)
+
+Many more can be seen below.
+
+Initial business insights:
+
+The correlation funnel shows that the following values for the predictors correspond to a high SalePrice (21,3497.50 and above):
+
+* Overall material and finish quality of 7 or higher
+* Good exterior quality material (not excellent since excellent cat value is not very common)
+* 3 car garage
+* 578 sq ft sized garage or larger
+* 1768 sq ft living area or larger
+* Excellent kitchen quality
+* 1308.25 sq ft basement or larger
+
+Feature engineering can be done to remove multicollinearity and slim down the dataset.
+
+Two-way Cross-Tabulations - Categorical Variables:
+
+Based on the p-value, these are the categorical variables that are not statistically significant (the rest are - see dataframe below):
+
+Utilities	1.0000000
+Condition1	1.0000000
+RoofStyle	1.0000000
+RoofMatl	1.0000000
+MiscFeature	1.0000000
+Fence	1.0000000
+GarageCond	1.0000000
+BldgType	0.9999861
+Exterior1st	0.9999839
+HeatingQC	0.9995947
+MSSubClass	0.9928572
+PavedDrive	0.9912800
+Alley	0.9637568
+BsmtFinType2	0.9480709
+Exterior2nd	0.8469190
+HouseStyle	0.6482615
+BsmtFinType1	0.2129277
+MoSold	0.1417502
+LandSlope	0.1050864
+LandContour	0.0867465
+Condition2	0.0759864
+GarageType	0.0647807
+Electrical	0.0556880
+GarageQual	0.0501487
+
+Most of these are not too surprising, as they don't seem like critical house features.
+
+Some additional insights into relationships between predictors (from predictor vs. predictor box plots below):
+
+* There is a higher overall quality for 1 and 2 story houses (lower for 1.5)
+* 2.5 story and 1 story have the largest 1st floor square footage (either house is massive, or since 1 story, 1st floor should be larger)
+* Good exterior condition means larger open porch square footage
+* Better kitchen quality means more recent year built, larger basement, first floor, and overall quality
+
+These predictor vs. predictor box plots also showed some outliers that do not necessarily makes sense such as 1 story house having 2nd floor square footage, but possibly there are exceptions in the real estate world. Since I don't have enough information to know if these are valid observations or not, I'm going to keep these in the model. The chosen models should be robust to outliers anyway.
+
+```{r, fig.width=10, fig.height=10}
+#Correlation matrix with target
+
+numeric_vars <- raw_data %>% select_if(is.numeric) 
+cor_matrix <- cor(numeric_vars, use="pairwise.complete.obs")
+corr_target <- cor_matrix[,"SalePrice"]
+corr_target_sorted <- sort(corr_target, decreasing = TRUE)
+
+kable(as.data.frame(corr_target_sorted), col.names = c("Correlation with SalePrice"), digits = 2)
+
+
+#Correlation heatmap
+corrplot::corrplot(cor_matrix, method = "color", type = "upper", 
+         tl.col = "black", tl.srt = 45, addCoef.col = "black",
+         number.cex = 0.7, diag = FALSE)
+
+# Correlation top 5 positive and negative
+corr_target <- cor_matrix[, "SalePrice"]
+corr_target <- corr_target[names(corr_target) != "SalePrice"]  # Remove self-correlation
+
+top_pos <- sort(corr_target, decreasing = TRUE)[1:3]
+top_neg <- sort(corr_target, decreasing = FALSE)[1:3]
+
+combined_df <- data.frame(
+  Feature = c(names(top_pos), names(top_neg)),
+  Correlation = c(top_pos, top_neg)) %>%
+  mutate(Direction = ifelse(Correlation > 0, "Positive", "Negative"))
+
+ggplot(combined_df, aes(x = reorder(Feature, Correlation), y = Correlation, fill = Direction)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_fill_manual(values = c("Positive" = "skyblue", "Negative" = "salmon")) +
+  labs(title = "Top Features Correlated with SalePrice",
+       x = "Feature",
+       y = "Correlation with SalePrice",
+       fill = "Direction") +
+  theme_minimal()
+
+# Correlation among predictors
+melt_cor <- melt(cor_matrix)
+melt_cor <- melt_cor |>
+  filter(Var1 != "SalePrice") |>
+  filter(Var2 != "SalePrice")
+filtered_cor <- melt_cor[melt_cor$Var1 != melt_cor$Var2 & as.numeric(melt_cor$Var1) < as.numeric(melt_cor$Var2), ]
+sorted_cor <- filtered_cor[order(abs(filtered_cor$value), decreasing = TRUE), ]
+kable(as.data.frame(sorted_cor), digits = 2)
+
+
+# Correlation Funnel
+set.seed(123)
+raw_data_v2 <- raw_data
+raw_data_v2 <- na.omit(raw_data_v2)
+raw_data_binarized_tbl <- raw_data_v2 %>%
+    binarize(n_bins = 4, thresh_infreq = 0.01)
+raw_data_correlated_tbl <- raw_data_binarized_tbl %>%
+    correlationfunnel::correlate(target = SalePrice__213497.5_Inf)
+raw_data_correlated_tbl %>%
+    correlationfunnel::plot_correlation_funnel(interactive = FALSE)
+```
+
+Two-way Cross-Tabulations - Categorical Variables:
+
+```{r, warning=FALSE}
+# Comparing categorical features with the target variable - Chi-square
+
+# got this piece of code from the internet
+# Loop through categorical variables, and apply chi square test for significance
+results <- map_dfr(categorical_predictors, function(var) {
+  tibble(
+    variable = var,
+    chisq_p_value = chisq.test(table(raw_data[[var]], raw_data$SalePrice))$p.value
+  )
+})
+results %>%
+  arrange(desc(chisq_p_value)) %>%
+  kbl() %>%
+  kable_styling(full_width = TRUE)
+```
+
+```{r, warning=FALSE}
+# too hard to read
+
+# Numerical relationships
+ggpairs(data_raw_numeric, progress = FALSE)
+```
+
+```{r, warning=FALSE}
+# Boxplots broken out by feature
+# Pick some features that might seem interesting, otherwise way too many graphs
+
+boxplot_predictors <- c("HouseStyle", "ExterCond", "GarageFinish", "Neighborhood", "KitchenQual")
+for (col_name in boxplot_predictors) {
+  plot_boxplot(raw_data, by = col_name, geom_boxplot_args = list("outlier.color" = "red"))
+}
+```
+### 4 Data Preparation
+
+#### 4.1 Fix Missing Values
+
+Random forest doesn't require missing values to be treated, but neural networks do. Let's use a missing indicator and median imputation for LotFrontage which is "orange/bad" predictor and has almost 50% values missing. For MasVnrArea, median imputation will be used and for Electrical and MasVnrType, the mode will be used.
+
+```{r, fig.width=5, fig.height=5}
+raw_data_transform <- raw_data
+
+# Add missing indicator for LotFrontage
+# Create new missing indicator variable
+raw_data_transform <- raw_data_transform %>%
+  mutate(is_LotFrontage_missing = is.na(LotFrontage))
+# impute LotFrontage missing values using the median
+raw_data_transform <- raw_data_transform %>%
+  mutate(LotFrontage_imputed = coalesce(LotFrontage, median(LotFrontage, na.rm = TRUE)))
+raw_data_transform$is_LotFrontage_missing <- as.factor(raw_data_transform$is_LotFrontage_missing)
+# Remove original feature
+raw_data_transform <- raw_data_transform |>
+  dplyr::select(-LotFrontage)
+
+
+# Fill in NA with mode for categorical and median for numeric
+raw_data_transform <- raw_data_transform %>%
+   mutate_at(vars(c("MasVnrArea")), ~ifelse(is.na(.), median(., na.rm = TRUE), .)) # this value is 0, so makes sense MasVnrType_mode to be None
+# Got these from distributions
+Electrical_mode <- "SBrkr"
+MasVnrType_mode <- "None"
+raw_data_transform$Electrical =  ifelse(is.na(raw_data_transform$Electrical), Electrical_mode, raw_data_transform$Electrical)
+raw_data_transform$MasVnrType =  ifelse(is.na(raw_data_transform$MasVnrType), MasVnrType_mode, raw_data_transform$MasVnrType)
+# convert to factor
+raw_data_transform$Electrical <- as.factor(raw_data_transform$Electrical)
+raw_data_transform$MasVnrType <- as.factor(raw_data_transform$MasVnrType)
+
+# Check for missing values again
+plot_missing(raw_data_transform)
+```
+
+
+
+#### 4.2 Double Check EDA (Correlations and Distributions)
+
+```{r}
+# Plot histograms
+plot_histogram(raw_data_transform)
+
+# Categorical Variables
+plot_bar(raw_data_transform)
+
+# Correlations
+plot_correlation(raw_data_transform)
+```
+
+#### 4.3 Transform skewed predictors
+
+Since random forest and neural networks can handle skewness (although data preprocessing is necessary for neural networks), let's not take any transformations such as log or square root.
+
+#### 4.4 Combine features
+
+Let's do some feature engineering and combine individual features into one to simplify the dataset (not necessary for both, but in some real-world scenarios limiting the data is useful).
+
+OverallTotalRating, TotalBaths, and TotalSF were created.
+
+```{r}
+# Combine features by adding
+
+# Total Overall Rating - Combine OverallQual and OverallCond by addition
+raw_data_transform$OverallTotalRating <- raw_data_transform$OverallQual + raw_data_transform$OverallCond
+# Total Baths - Full and Half
+raw_data_transform$TotalBaths <- raw_data_transform$BsmtFullBath + raw_data_transform$BsmtHalfBath + raw_data_transform$FullBath + raw_data_transform$HalfBath
+# Total SF
+raw_data_transform$TotalSF <- raw_data_transform$TotalBsmtSF + raw_data_transform$X1stFlrSF + raw_data_transform$X2ndFlrSF
+
+```
+
+
+#### 4.5 Remove Multicollinearity
+
+Random Forest can handle multicollinearity (and neural network to some extent), but let's we remove some features to simplify the dataset. Having multicollinearity in RF's important features can be less informative since we don't truly know which one is more impactful.
+
+For GarageCars/GarageArea let's remove GarageCars. For TotalBsmtSF/X1stFlrSF, let's remove TotalBsmtSF. For X2ndFlrSF/GrLivArea, let's remove GrLivArea. For BedroomAbvGr/TotRmsAbvGrd, let's remove BedroomAbvGr For BsmtFinSF1/BsmtFullBath, let's remove BsmtFullBath. For X2ndFlrSF/TotRmsAbvGrd, let's remove TotRmsAbvGrd. For X2ndFlrSF/HalfBath, let's remove X2ndFlrSF.
+
+```{r}
+# Create a dataset that removes multicollineariy
+
+raw_data_transform2 <- raw_data_transform |>
+  dplyr::select(-c(GarageCars, TotRmsAbvGrd, TotalBsmtSF, GrLivArea, BedroomAbvGr, BsmtFullBath, X2ndFlrSF))
+
+```
+
+
+#### 4.6 Prepare for Neural Network
+
+The data preprocessing necessary for neural networks is:
+
+* convert categorical features into numeric (not factors)
+* remove missing values (already done)
+* scale the features between 0 and 1
+
+```{r}
+# Neural networks work best when the input data is scaled to a narrow range around zero - must be integers, not factors
+
+# dataset without the new combined features
+raw_data_transform_nn1 <- raw_data_transform |>
+  dplyr::select(-c(OverallTotalRating, TotalBaths, TotalSF))
+# find categorical predictors
+raw_data_transform_categorical <- raw_data_transform_nn1 |>
+  dplyr::select(where(is.factor) | where(is.character))
+raw_data_transform_categorical_predictors <- names(raw_data_transform_categorical)[names(raw_data_transform_categorical) != "SalePrice"]
+
+dummy_formula <- as.formula(paste("~ . -SalePrice")) # Adjust as needed
+# categorical dataset
+cat_data_raw_nn <- raw_data_transform_nn1[, raw_data_transform_categorical_predictors]
+# use dummyVars to create dummy variables
+dummies <- dummyVars(~ ., data = cat_data_raw_nn, fullRank = FALSE)
+my_data_encoded <- data.frame(predict(dummies, newdata = cat_data_raw_nn))
+# numeric columns
+numeric_cols <- setdiff(names(raw_data_transform_nn1), c(raw_data_transform_categorical_predictors, "SalePrice"))
+# combine back the columns
+final_data_for_nn <- cbind(raw_data_transform_nn1[, numeric_cols], my_data_encoded, raw_data_transform_nn1$SalePrice)
+# Rename target column
+colnames(final_data_for_nn)[ncol(final_data_for_nn)] <- "SalePrice"
+
+head(final_data_for_nn)
+
+# inspired from textbook
+normalize <- function(x) {
+    return((x - min(x)) / (max(x) - min(x)))
+}
+# scale the features
+final_data_for_nn_norm <- as.data.frame(lapply(final_data_for_nn, normalize))
+```
+
+
+#### 4.7 Split Data for Validation
+
+To ensure objective model evaluation and prevent overfitting, we split each dataset into training (80%) and testing (20%) sets using a consistent random seed (set.seed(123)) for reproducibility.
+
+```{r}
+# Split data for validation
+set.seed(123)
+
+train_idx <- createDataPartition(y = raw_data$SalePrice, p = 0.8, list = FALSE)
+
+# Create train/test splits for each dataset
+train <- raw_data[train_idx, ]
+test <- raw_data[-train_idx, ]
+
+# Transformed predictors dataset
+train_transformed <- raw_data_transform[train_idx, ]
+test_transformed <- raw_data_transform[-train_idx, ]
+
+# Transformed predictors dataset
+train_transformed2 <- raw_data_transform2[train_idx, ]
+test_transformed2 <- raw_data_transform2[-train_idx, ]
+
+
+# NN 1 dataset
+train_transformed_nn1 <- final_data_for_nn_norm[train_idx, ]
+test_transformed_nn1 <- final_data_for_nn_norm[-train_idx, ]
+```
+
+
+#### PCA
+
+I was going to try PCA since I have a lot of features, including ones that show multicollinearity, but since RF and NN are both very robust and PCA is not required, I decided to skip.
+
+```{r, fig.width=5, fig.height=15}
+# ## Visualize principal component analysis
+# raw_data_transform_pca <- raw_data_transform |>
+#   dplyr::select(-LotFrontage)
+# plot_prcomp(raw_data_transform_pca, maxcat = 10L)
+```
+
+
+### 5 Build Models
+
+NOTE: Kaggle competition recommends using RMSE as the chosen metric, and for RMSE, use the log of the actual and predicted values to reduce impact of large errors Taking logs means that errors in predicting expensive houses and cheap houses will affect the result equally.
+
+#### Algorithm Selection
+
+I chose random forest as the algorithm from weeks 1-10 and the neural network from recent weeks. Random forest is an ensemble method, that uses a "team" of decision trees.
+
+Random forest would be good for this dataset because:
+
+* Not a lot of data preprocessing is necessary - can handle categorical and continuous features (which this dataset has) 
+* Can handle noisy data (and missing data as well)
+* Can capture nonlinear, complex relationships
+* Can easily be used with many features (80+ features in this dataset) or observations
+* Can extract important features for business insights
+* Has shown to be a robust model with high accuracy as it uses an ensemble of decision trees
+* Not prone to overfitting or underfitting
+* Using ranger package is fairly fast
+
+I have also never used random forest for regression, so this would be a good learning experience.
+
+Potential issues:
+
+* Not easily interpretable
+* Can't be extensively tuned for better performance
+* Can have high computational cost
+* Predictions are bound by the range of the target values seen in the training data
+
+Neural network is another good option. Neural networks contain an input layer, a hidden layer, and an output layer, mimicking a human brain. After receiving raw input in the input layer, it is able to process input through the hidden layers, with the output layer producing the result. It does this through optimizing the many parameters through gradient descent and backpropagation. The many hyperparameters and activation function make this model able to handle complex patterns and relationships - it has the ability to fit to the training data well.
+
+Pros of NN:
+
+* Can capture nonlinear, complex relationships
+* Good for large datasets
+* Has shown to be a robust model with high accuracy
+* Can handle categorical and continuous features (yet data preprocessing needed for categorical (must be numeric)) 
+* Automated feature engineering (figure out relationships between features)
+
+I have also never used a neural network before, so this would be a good learning experience.
+
+Potential issues:
+
+* Not very interpretable due to "black box" nature (harder for business decisions)
+* Higher computational cost
+* Difficult to tune
+* Data preprocessing needed for categorical features - increases the amount of features
+* Can't have missing values
+* Scaling required of features
+* Requires large amounts of data to accurately detect patterns
+* Can be prone to overfitting
+* Not always the best for simpler tasks (datasets that are structured, tabular), better for unstructured data
+
+#### Random Forest
+
+ranger function arguments:
+
+* formula Object of class formula or character describing the model to fit. Interaction
+terms supported only for numerical variables.
+* data Training data of class data.frame, matrix, dgCMatrix (Matrix) or gwaa.data
+(GenABEL).
+* num.trees Number of trees.
+* mtry Number of variables to possibly split at in each node. Default is the (rounded
+down) square root of the number variables. Alternatively, a single argument
+function returning an integer, given the number of independent variables.
+* importance Variable importance mode, one of ’none’, ’impurity’, ’impurity_corrected’, ’permutation’. The ’impurity’ measure is the Gini index for classification, the variance of the responses for regression and the sum of test statistics (see splitrule)
+for survival.
+* write.forest Save ranger.forest object, required for prediction. Set to FALSE to reduce
+memory usage if no prediction intended.
+* probability Grow a probability forest as in Malley et al. (2012).
+* min.node.size Minimal node size to split at. Default 1 for classification, 5 for regression, 3
+for survival, and 10 for probability. For classification, this can be a vector of
+class-specific values.
+* min.bucket Minimal terminal node size. No nodes smaller than this value can occur. Default
+3 for survival and 1 for all other tree types. For classification, this can be a vector
+of class-specific values.
+* max.depth Maximal tree depth. A value of NULL or 0 (the default) corresponds to unlimited depth, 1 to tree stumps (1 split per tree).
+replace Sample with replacement.
+
+##### RF Model 1: Original Predictors
+
+Experiment:
+
+* Use the original predictors (except for LotFrontage)
+* Use tuning grid for optimal params:
+- Increasing mtry:
+Smaller number of variables to possibly split at in each node increases the randomness and decreases correlation between trees. Yet, this can decrease the accuracy of individual trees. For smaller mtry, bias increases and variance decreases. Larger values will decrease bias (more complex trees), increase variance (reduce randomness, more correlation among trees).
+- Increasing min.node.size:
+Smaller values allow trees to become more complex and grow deeper - decreasing bias and higher variance (more prone to overfitting). Larger values allow trees to become less complex and more shallow, increasing bias and lowering variance (less prone to overfitting, but could be too simple).
+
+Purpose:
+
+See how well a model does with all the original predictors, and varied mtry and min node size values (tuning goals above).
+
+Result:
+
+* Very high R Squared of 0.9699 and low RMSE of 0.0718 (using logs): a very high proportion of the variance is explainable and has a high accuracy
+* Normal RMSE and R Squared are very similar to ones taken with logs
+* Not surprisingly OverallQual, ExterQual and GarageArea are the most important predictors - this matches the correlation funnel!
+* Interestingly, YearBuilt ranks #6 in importance - this was not crazy high in the correlation funnel
+* A potential downside - highly correlated variables are within the top 10 important features such as GarageArea and GarageCars - is GarageCars actually more important?
+* The final values used for the model were mtry = 25, splitrule = variance and min.node.size = 10.
+
+```{r}
+# RF MODEL 1 -- Base model (use original predictors, except for LotFrontage updates)
+
+# Remove the new combined features created
+raw_data_transform_predictors <- raw_data_transform |>
+  dplyr::select(-c(SalePrice, OverallTotalRating, TotalBaths, TotalSF))
+
+# Target variable
+raw_data_transform_response <- raw_data_transform$SalePrice
+
+set.seed(123)
+# Train the RF model
+# ranger is much faster by improving upon randomForest
+
+# Tuning grid
+tuneGrid <- data.frame(
+  .mtry = c(3, 10, 25), # increasing mtry
+  .splitrule = "variance",
+  .min.node.size = c(2, 4, 10) # increasing min node size
+)
+
+# Train the model - use cross-validation
+rf_model1 <- train(
+  x = raw_data_transform_predictors,
+  y = raw_data_transform_response,
+  method = "ranger",
+  trControl = trainControl(
+    method = "cv",
+    number = 5,
+    verboseIter = TRUE
+  ),
+  metric = "RMSE",
+  tuneGrid = tuneGrid,
+  # probability = TRUE,
+  importance = "impurity"
+)
+
+# Print RF model
+print(rf_model1)
+
+# Plot hyperparam tuning
+plot(rf_model1)
+```
+
+
+
+
+```{r, fig.width=5, fig.height=10}
+# Make predictions
+rf_model1_predictions <- predict(rf_model1, test_transformed)
+
+# Evaluate
+# NOTE: competition recommended looking at the log of SalePrice for RMSE (selected metric) - reduces impact of large errors
+log_metrics <- postResample(pred = log(rf_model1_predictions + 1), obs = log(test_transformed$SalePrice + 1))
+rf_model1_rmse_log <- log_metrics["RMSE"]
+rf_model1_Rsquared_log <- log_metrics["Rsquared"]
+rf_model1_MAE_log <- log_metrics["MAE"]
+
+
+# Not taking log
+metrics <- postResample(pred = rf_model1_predictions, obs = test_transformed$SalePrice)
+rf_model1_rmse <- metrics["RMSE"]
+rf_model1_Rsquared <- metrics["Rsquared"]
+rf_model1_MAE <- metrics["MAE"]
+
+
+rf_model1_output <- paste(
+    "\n=== Model Selection and Evaluation ===\n\n",
+    "=== RF MODEL 1 Evaluation ===\n",
+    "RMSLE:", round(rf_model1_rmse_log, 4), 
+    "| MAE (log):", round(rf_model1_MAE_log, 4),
+    "| R² (log):", round(rf_model1_Rsquared_log, 4),
+    "| RMSE:", round(rf_model1_rmse, 4), 
+    "| MAE:", round(rf_model1_MAE, 4),
+    "| R²:", round(rf_model1_Rsquared, 4),
+    "\n\n",
+    sep = " "
+  )
+cat(rf_model1_output)
+
+# Feature importance
+plot(varImp(rf_model1))
+```
+
+
+##### RF Model 2: Address Multicollinearity
+
+Experiment:
+
+* Remove variables that show very high multicollinearity
+* Use tuning grid for optimal params:
+- Increasing mtry:
+Smaller number of variables to possibly split at in each node increases the randomness and decreases correlation between trees. Yet, this can decrease the accuracy of individual trees. For smaller mtry, bias increases and variance decreases. Larger values will decrease bias (more complex trees), increase variance (reduce randomness, more correlation among trees).
+- Increasing min.node.size:
+Smaller values allow trees to become more complex and grow deeper - decreasing bias and higher variance (more prone to overfitting). Larger values allows tress to become less complex and more shallow, increasing bias and lowering variance (less prone to overfitting, but could be too simple).
+
+Purpose:
+
+* Although random forest is fairly robust to multicollinearity, multicollinearity makes it harder to interpret which of the correlated features are actually more important (model might just arbitrarily pick any).
+
+Result:
+
+* High R squared of 0.8605 and low RMSE of 0.1521 (using logs): a high proportion of the variance is explainable and has a high accuracy
+* Not as high performing as model 1, but still has a pretty good performance
+* Not surprisingly OverallQual, ExterQual and GarageArea are the most important predictors - this matches the correlation funnel!
+* Top 10 important features changed due to removal of multicollinearity - possibly makes business decisions easier
+* Wider variety of features now included in the top 10 such as FullBath
+* Interestingly, YearBuilt ranks #4 in importance - this was not crazy high in the correlation funnel
+* The final values used for the model were mtry = 25, splitrule = variance and min.node.size = 10.
+
+```{r}
+# RF MODEL 2 -- Use the dataset that removed high multicollinearity predictors 
+
+# Remove the new combined features created
+train_transformed2_predictors <- train_transformed2 |>
+  dplyr::select(-c(SalePrice, OverallTotalRating, TotalBaths, TotalSF))
+
+# Target variable
+train_transformed2_response <- train_transformed2$SalePrice
+
+set.seed(123)
+# Train the RF model
+# ranger is much faster by improving upon randomForest
+
+# Tuning grid
+tuneGrid <- data.frame(
+  .mtry = c(3, 10, 25), # increasing mtry
+  .splitrule = "variance",
+  .min.node.size = c(2, 4, 10) # increasing node size
+)
+
+# Train the model - use cross-validation
+rf_model2 <- train(
+  x = train_transformed2_predictors,
+  y = train_transformed2_response,
+  method = "ranger",
+  trControl = trainControl(
+    method = "cv",
+    number = 5,
+    verboseIter = TRUE
+  ),
+  metric = "RMSE",
+  tuneGrid = tuneGrid,
+  importance = "impurity"
+)
+
+# Print and plot model (hyperparam tuning)
+print(rf_model2)
+
+plot(rf_model2)
+```
+
+
+```{r, fig.width=5, fig.height=10}
+# Make predictions
+rf_model2_predictions <- predict(rf_model2, test_transformed2)
+
+# Evaluate
+# NOTE: competition recommended looking at the log of SalePrice for RMSE (selected metric) - reduces impact of large errors
+log_metrics <- postResample(pred = log(rf_model2_predictions + 1), obs = log(test_transformed2$SalePrice + 1))
+# RMSE
+rf_model2_rmse_log <- log_metrics["RMSE"]
+# R Squared
+rf_model2_Rsquared_log <- log_metrics["Rsquared"]
+# MAE
+rf_model2_MAE_log <- log_metrics["MAE"]
+
+
+# not taking log
+metrics <- postResample(pred = rf_model2_predictions, obs = test_transformed2$SalePrice)
+# RMSE
+rf_model2_rmse <- metrics["RMSE"]
+# R Squared
+rf_model2_Rsquared <- metrics["Rsquared"]
+# MAE
+rf_model2_MAE <- metrics["MAE"]
+
+rf_model2_output <- paste(
+    "\n=== Model Selection and Evaluation ===\n\n",
+    "=== RF MODEL 2 Evaluation ===\n",
+    "RMSLE:", round(rf_model2_rmse_log, 4), 
+    "| MAE (log):", round(rf_model2_MAE_log, 4),
+    "| R² (log):", round(rf_model2_Rsquared_log, 4),
+    "| RMSE:", round(rf_model2_rmse, 4), 
+    "| MAE:", round(rf_model2_MAE, 4),
+    "| R²:", round(rf_model2_Rsquared, 4),
+    "\n\n",
+    sep = " "
+  )
+cat(rf_model2_output)
+
+# Feature importance
+plot(varImp(rf_model2))
+```
+
+##### RF Model 3: Combined Features
+
+Experiment:
+
+* Use combined features created above (OverallTotalRating, TotalBaths, and TotalSF) and remove the related original predictors.
+* Use tuning grid for optimal params:
+- Increasing mtry:
+Smaller number of variables to possibly split at in each node increases the randomness and decreases correlation between trees. Yet, this can decrease the accuracy of individual trees. For smaller mtry, bias increases and variance decreases. Larger values will decrease bias (more complex trees), increase variance (reduce randomness, more correlation among trees).
+- Increasing min.node.size:
+Smaller values allow trees to become more complex and grow deeper - decreasing bias and higher variance (more prone to overfitting). Larger values allows tress to become less complex and more shallow, increasing bias and lowering variance (less prone to overfitting, but could be too simple).
+
+Purpose:
+
+* See how creating new features based off existing ones can help or hurt the model
+
+Result:
+
+* High R squared of 0.8865 and low RMSE of 0.1369 (using logs): a high proportion of the variance is explainable and has a high accuracy
+* Not as high performing as model 1, but still has a pretty good performance
+* Creating new features performed better than only removing features (model 2), showing multicollinearity is not a huge issue for random forests
+* TotalSF, GarageCars, ExterQual are the most important predictors - now the total square footage of house means more than the rating of the house. Garage space and exterior rating is still important for this model.
+* Interestingly, OverallTotalRating dropped to #5 (OverallRating used to be #1)
+* The final values used for the model were mtry = 25, splitrule = variance and min.node.size = 10.
+
+
+```{r}
+# RF MODEL 3 - USE COMBINED FEATURES
+
+# Predictors -- remove predictors used for combined features
+train_transformed3_predictors <- train_transformed |>
+  dplyr::select(-c(SalePrice, OverallQual, OverallCond, BsmtFullBath, BsmtHalfBath, FullBath, HalfBath, TotalBsmtSF, X1stFlrSF, X2ndFlrSF))
+
+# Target variable
+train_transformed3_response <- train_transformed$SalePrice
+
+set.seed(123)
+# Train the RF model
+# ranger is much faster by improving upon randomForest
+
+# Tuning grid
+tuneGrid <- data.frame(
+  .mtry = c(3, 10, 25),
+  .splitrule = "variance",
+  .min.node.size = c(2, 4, 10)
+)
+
+# Train the model - use cross-validation
+rf_model3 <- train(
+  x = train_transformed3_predictors,
+  y = train_transformed3_response,
+  method = "ranger",
+  trControl = trainControl(
+    method = "cv",
+    number = 5,
+    verboseIter = TRUE
+  ),
+  metric = "RMSE",
+  tuneGrid = tuneGrid,
+  importance = "impurity"
+)
+
+# Plot and print the model
+print(rf_model3)
+
+plot(rf_model3)
+```
+
+
+
+
+```{r, fig.width=5, fig.height=10}
+# Make predictions
+rf_model3_predictions <- predict(rf_model3, test_transformed)
+
+# Evaluate
+# NOTE: competition recommended looking at the log of SalePrice for RMSE (selected metric) - reduces impact of large errors
+log_metrics <- postResample(pred = log(rf_model3_predictions + 1), obs = log(test_transformed$SalePrice + 1))
+# RMSE
+rf_model3_rmse_log <- log_metrics["RMSE"]
+# R Squared
+rf_model3_Rsquared_log <- log_metrics["Rsquared"]
+# MAE
+rf_model3_MAE_log <- log_metrics["MAE"]
+
+
+# not taking log
+metrics <- postResample(pred = rf_model3_predictions, obs = test_transformed$SalePrice)
+# RMSE
+rf_model3_rmse <- metrics["RMSE"]
+# R Squared
+rf_model3_Rsquared <- metrics["Rsquared"]
+# MAE
+rf_model3_MAE <- metrics["MAE"]
+
+rf_model3_output <- paste(
+    "\n=== Model Selection and Evaluation ===\n\n",
+    "=== RF MODEL 3 Evaluation ===\n",
+    "RMSLE:", round(rf_model3_rmse_log, 4), 
+    "| MAE (log):", round(rf_model3_MAE_log, 4),
+    "| R² (log):", round(rf_model3_Rsquared_log, 4),
+    "| RMSE:", round(rf_model3_rmse, 4), 
+    "| MAE:", round(rf_model3_MAE, 4),
+    "| R²:", round(rf_model3_Rsquared, 4),
+    "\n\n",
+    sep = " "
+  )
+cat(rf_model3_output)
+
+# Feature importance
+plot(varImp(rf_model3))
+```
+
+
+#### Neural Network
+
+The default parameters for neuralnet are (from textbook):
+
+* hidden (number of neurons in the hidden layers) == 1
+* act.fct (activation function) == "logistic"
+
+Note: rprop+ is the default algorithm to calculate the neural network. rprop+ is resilient backpropagation with weight backtracking, which manages the learning rate dynamics automatically. So for this scenario, I will not play around the different learning rates (will not update the algorithm to "backprop").
+
+##### NN Model 1: Original Predictors (Base Model)
+
+Experiment:
+
+* Use original predictors and default params as a base model.
+* Use only 1 hidden layer
+
+Purpose:
+
+* See how a basic neural network performs with the dataset.
+
+Result:
+
+* High R squared of 0.8587 and RMSE of 0.0246 (using logs): a high proportion of the variance is explainable and has a high accuracy
+* Fairly good performance with only 1 hidden layer
+* log function seems to be fairly suitable for this dataset - better gradient landscape, stable convergence
+* Hyperparameter tuning might improve the model
+
+```{r}
+# NN MODEL 1 - BASE MODEL W/ ORIG (ALL) PREDICTORS
+set.seed(123)
+nn_model1 <- neuralnet(SalePrice ~ .,
+  data = train_transformed_nn1) # use the nn dataset we created earlier
+
+plot(nn_model1)
+```
+
+```{r}
+# compute returns list with 2 components - neurons (stores neurons for each layer in the network) & net.result (stores the model's predicted values)
+nn1_results <- compute(nn_model1, test_transformed_nn1)
+
+# Grab predictions - normalized
+nn1_predictions <- nn1_results$net.result
+
+# scaling doesnt matter here
+cor(nn1_predictions, test_transformed_nn1$SalePrice)
+```
+
+
+```{r}
+# Evaluation
+
+# inspired from textbook
+unnormalize <- function(x) {
+    return(x * (max(final_data_for_nn$SalePrice) - min(final_data_for_nn$SalePrice)) + min(final_data_for_nn$SalePrice))
+}
+nn1_predictions_unnorm <- unnormalize(nn1_predictions)
+
+# Evaluation using log
+nn1_residuals_log <- log(test_transformed$SalePrice + 1) - log(nn1_predictions_unnorm + 1)
+nn1_mse_log <- mean(nn1_residuals_log^2)
+nn1_rmse_log <- sqrt(nn1_mse_log)
+nn1_Rsquared_log <- R2(log(nn1_predictions_unnorm + 1), log(test_transformed$SalePrice + 1))
+mae <- function(actual, predicted) {
+  mean(abs(actual - predicted))
+}
+nn1_mae_log <- mae(log(test_transformed$SalePrice + 1), log(nn1_predictions_unnorm + 1))
+
+
+# NOT using log
+nn1_residuals <- test_transformed$SalePrice - nn1_predictions_unnorm
+nn1_mse <- mean(nn1_residuals^2)
+nn1_rmse <- sqrt(nn1_mse)
+nn1_Rsquared <- R2(nn1_predictions_unnorm, test_transformed$SalePrice)
+mae <- function(actual, predicted) {
+  mean(abs(actual - predicted))
+}
+nn1_mae <- mae(test_transformed$SalePrice, nn1_predictions_unnorm)
+
+nn_model1_output <- paste(
+    "\n=== Model Selection and Evaluation ===\n\n",
+    "=== NN MODEL 1 Evaluation ===\n",
+    "RMSLE:", round(nn1_mse_log, 4), 
+    "| MAE (log):", round(nn1_mae_log, 4),
+    "| R² (log):", round(nn1_Rsquared_log, 4),
+    "| RMSE:", round(nn1_rmse, 4), 
+    "| MAE:", round(nn1_mae, 4),
+    "| R²:", round(nn1_Rsquared, 4),
+    "\n\n",
+    sep = " "
+  )
+cat(nn_model1_output)
+```
+
+
+##### NN Model 2: Original Predictors - Increase Hidden Nodes 
+
+Experiment:
+
+* Use original predictors
+* Increase number of hidden nodes
+
+Purpose:
+
+* Increasing the number of hidden nodes should reduce underfitting by making the model more complex. This decreases bias, and increases variance.
+
+Result:
+
+* Very low R squared of 0.2805 and high RMSE of 122739.4042 (NOT using logs): a high proportion of the variance is not explainable and has a poor accuracy
+* Potential too many hidden nodes that caused too low bias and high variance (overfitting - changes too significantly with small changes in the data)
+
+```{r}
+# NN MODEL 2 - INCREASE HIDDEN LAYERS
+
+set.seed(123)
+
+# Train model
+nn_model2 <- neuralnet(SalePrice ~ .,
+  data = train_transformed_nn1,
+  hidden = 7)
+
+plot(nn_model2)
+```
+
+```{r}
+# compute returns list with 2 components - neurons (stores neurons for each layer in the network) & net.result (stores the model's predicted values)
+nn2_results <- compute(nn_model2, test_transformed_nn1)
+
+# Grab predictions - normalized
+nn2_predictions <- nn2_results$net.result
+
+# scaling doesnt matter here
+cor(nn2_predictions, test_transformed_nn1$SalePrice)
+```
+
+```{r}
+# Evaluation
+nn2_predictions_unnorm <- unnormalize(nn2_predictions)
+
+# Evaluation metrics using log (recommended by kaggle)
+nn2_residuals_log <- log(test_transformed$SalePrice + 1) - log(nn2_predictions_unnorm + 1)
+nn2_mse_log <- mean(nn2_residuals_log^2)
+nn2_rmse_log <- sqrt(nn2_mse_log)
+nn2_Rsquared_log <- R2(log(nn2_predictions_unnorm + 1), log(test_transformed$SalePrice + 1))
+nn2_mae_log <- mae(log(test_transformed$SalePrice + 1), log(nn2_predictions_unnorm + 1))
+
+# NOT taking log
+nn2_residuals <- test_transformed$SalePrice - nn2_predictions_unnorm
+nn2_mse <- mean(nn2_residuals^2)
+nn2_rmse <- sqrt(nn2_mse)
+nn2_Rsquared <- R2(nn2_predictions_unnorm, test_transformed$SalePrice)
+nn2_mae <- mae(test_transformed$SalePrice, nn2_predictions_unnorm)
+
+nn_model2_output <- paste(
+    "\n=== Model Selection and Evaluation ===\n\n",
+    "=== NN MODEL 2 Evaluation ===\n",
+    "RMSLE:", round(nn2_mse_log, 4), 
+    "| MAE (log):", round(nn2_mae_log, 4),
+    "| R² (log):", round(nn2_Rsquared_log, 4),
+    "| RMSE:", round(nn2_rmse, 4), 
+    "| MAE:", round(nn2_mae, 4),
+    "| R²:", round(nn2_Rsquared, 4),
+    "\n\n",
+    sep = " "
+  )
+cat(nn_model2_output)
+```
+
+
+##### NN Model 3: Original Predictors - Update Activation Function (SmoothReLU) + Extra Hidden Layer
+
+Experiment:
+
+* Use original predictors
+* Use SmoothReLU for activation function
+* Use 2 hidden layer networks
+
+Purpose:
+
+* ReLU is highly efficient for gradient descent, but can't be used with neuralnet since its derivative is undefined at x=0. The purpose of this experiment is to see how using a smoothing approximation of the ReLU known as SmoothReLU can improve the model. I will also try adding a second hidden layer of five nodes to create a two-layer network. This causes the model to learn more complex patterns, yet could also lead to overfitting and vanishing gradient problem.
+
+Result:
+
+* Very low R squared of 0.0051 and high RMSE of 2326672.3496 (NOT using logs): extremely high proportion of the variance is not explainable and has a poor accuracy
+* Does not fit well to the data at all
+* Adding the extra layer most likely increased the variance greatly causing overfitting (way too complex for this small dataset)
+* Vanishing gradient problem could be happening with the extra layer as well
+* SmoothReLU could also be causing gradient instability
+
+```{r}
+# NN MODEL 3 - USE ReLU (W/ ORIG PREDICTORS)
+
+set.seed(123)
+
+# define a softplus function
+softplus <- function(x) { log(1 + exp(x)) }
+
+# Train model
+nn_model3 <- neuralnet(SalePrice ~ .,
+                      hidden = c(5,5), 
+                      act.fct = softplus, 
+                      data = train_transformed_nn1)
+
+plot(nn_model3)
+```
+
+```{r}
+# compute returns list with 2 components - neurons (stores neurons for each layer in the network) & net.result (stores the model's predicted values)
+nn3_results <- compute(nn_model3, test_transformed_nn1)
+
+# Grab predictions - normalized
+nn3_predictions <- nn3_results$net.result
+
+# scaling doesnt matter here
+cor(nn3_predictions, test_transformed_nn1$SalePrice)
+```
+
+ˆ
+```{r}
+# Evaluation
+nn3_predictions_unnorm <- unnormalize(nn3_predictions)
+
+# Evaluation metrics using log
+nn3_residuals_log <- log(test_transformed$SalePrice + 1) - log(nn3_predictions_unnorm + 1)
+nn3_mse_log <- mean(nn3_residuals_log^2)
+nn3_rmse_log <- sqrt(nn3_mse_log)
+nn3_Rsquared_log <- R2(log(nn3_predictions_unnorm + 1), log(test_transformed$SalePrice + 1))
+nn3_mae_log <- mae(log(test_transformed$SalePrice + 1), log(nn3_predictions_unnorm + 1))
+
+# NOT using log
+nn3_residuals <- test_transformed$SalePrice - nn3_predictions_unnorm
+nn3_mse <- mean(nn3_residuals^2)
+nn3_rmse <- sqrt(nn3_mse)
+nn3_Rsquared <- R2(nn3_predictions_unnorm, test_transformed$SalePrice)
+nn3_mae <- mae(test_transformed$SalePrice, nn3_predictions_unnorm)
+
+
+nn_model3_output <- paste(
+    "\n=== Model Selection and Evaluation ===\n\n",
+    "=== NN MODEL 3 Evaluation ===\n",
+    "RMSLE:", round(nn3_mse_log, 4), 
+    "| MAE (log):", round(nn3_mae_log, 4),
+    "| R² (log):", round(nn3_Rsquared_log, 4),
+    "| RMSE:", round(nn3_rmse, 4), 
+    "| MAE:", round(nn3_mae, 4),
+    "| R²:", round(nn3_Rsquared, 4),
+    "\n\n",
+    sep = " "
+  )
+cat(nn_model3_output)
+```
+
+
+##### NN Model 4: Original Predictors - Only Update Activation Function (SmoothReLU)
+
+Experiment:
+
+* Use original predictors
+* Use SmoothReLU for activation function
+
+Purpose:
+
+ReLU is highly efficient for gradient descent, but can't be used with neuralnet since its derivative is undefined at x=0. The purpose of this experiment is to see how using a smoothing approximation of the ReLU known as SmoothReLU can improve the model. Since the last model performed very poorly, I'm going to try the same activation function but just use 1 hidden layer to see if the model can train more effectively. SmoothReLU should also perform fairly well with shallow networks.
+
+Result:
+
+* Very low R squared of 0.0976 and high RMSE of 316940.4083 (NOT using logs): extremely high proportion of the variance is not explainable and has a poor accuracy
+* Does not fit well to the data at all
+* Removing the extra layer did not help the model
+* SmoothReLU could also be causing gradient instability and might be too smooth
+* Possibly more hyperparameter tuning required
+
+```{r}
+# NN MODEL 4 - USE SmoothReLU (W/ ORIG PREDICTORS)
+
+set.seed(123)
+
+# Train model
+nn_model4 <- neuralnet(SalePrice ~ .,
+                      hidden = c(5), # only 1 hidden layer network
+                      act.fct = softplus, 
+                      data = train_transformed_nn1)
+
+plot(nn_model4)
+```
+
+```{r}
+# compute returns list with 2 components - neurons (stores neurons for each layer in the network) & net.result (stores the model's predicted values)
+nn4_results <- compute(nn_model4, test_transformed_nn1)
+
+# Grab predictions - normalized
+nn4_predictions <- nn4_results$net.result
+
+# scaling doesnt matter here
+cor(nn4_predictions, test_transformed_nn1$SalePrice)
+```
+
+
+```{r}
+# Evaluation
+nn4_predictions_unnorm <- unnormalize(nn4_predictions)
+
+# Evaluation metrics using log
+nn4_residuals_log <- log(test_transformed$SalePrice + 1) - log(nn4_predictions_unnorm + 1)
+nn4_mse_log <- mean(nn4_residuals_log^2)
+nn4_rmse_log <- sqrt(nn4_mse_log)
+nn4_Rsquared_log <- R2(log(nn4_predictions_unnorm + 1), log(test_transformed$SalePrice + 1))
+nn4_mae_log <- mae(log(test_transformed$SalePrice + 1), log(nn4_predictions_unnorm + 1))
+
+# Evaluation metrics NOT using log
+nn4_residuals <- test_transformed$SalePrice - nn4_predictions_unnorm
+nn4_mse <- mean(nn4_residuals^2)
+nn4_rmse <- sqrt(nn4_mse)
+nn4_Rsquared <- R2(nn4_predictions_unnorm, test_transformed$SalePrice)
+nn4_mae <- mae(test_transformed$SalePrice, nn4_predictions_unnorm)
+
+nn_model4_output <- paste(
+    "\n=== Model Selection and Evaluation ===\n\n",
+    "=== NN MODEL 4 Evaluation ===\n",
+    "RMSLE:", round(nn4_mse_log, 4), 
+    "| MAE (log):", round(nn4_mae_log, 4),
+    "| R² (log):", round(nn4_Rsquared_log, 4),
+    "| RMSE:", round(nn4_rmse, 4), 
+    "| MAE:", round(nn4_mae, 4),
+    "| R²:", round(nn4_Rsquared, 4),
+    "\n\n",
+    sep = " "
+  )
+cat(nn_model4_output)
+```
+
+### 6 Comparison
+
+NOTE: See results table below
+
+Recommended model: RF MODEL 1 (Original predictors)
+
+Key Strengths:
+
+* Highest explanatory power (highest R Squared with lowest RMSE)
+* Not a lot of data preprocessing needed - able to use all the predictors
+* Clearly shows which features are the most important in determining final house price - almost all revolve around quality and size
+* Shows features that might've not been at the top of the list of importance beforehand such as YearBuilt
+* Able to use the power of an ensemble of trees
+
+RF Model 1 Top 10 Features:
+
+* OverallQual
+* GrLivArea
+* ExterQual
+* GarageCars
+* TotalBsmtSF
+* YearBuilt
+* GarageArea
+* X1stFlrSF
+* KitchenQual
+* X2ndFlrSF
+
+Trade-offs:
+
+* Some important features are highly correlated making it hard to know for sure which one is actually more important
+* Could be more computationally expensive given it uses all the original predictors
+* Not very interpretable
+
+Reasoning on not choosing other models:
+
+RF Model 2:
+
+* Higher RMSE and lower R Squared: smaller explanatory power
+* Removing multicollinearity features removed important information that would give the model better accuracy
+* Although, now we know exactly which features are most important compared to model 1, plus a wider variety of features are included
+
+RF Model 2 Top 10 Features:
+
+* OverallQual
+* ExterQual
+* GarageArea
+* YearBuilt
+* BsmtQual
+* KitchenQual
+* X1stFlrSF
+* LotArea
+* FullBath
+* BsmtFinSF1
+
+RF Model 3:
+
+* Higher RMSE and lower R Squared: smaller explanatory power (although better than model 2)
+* Adding features instead of keeping the individual ones might've removed important relationships among features
+* Combining features could've made it harder for random forest to find optimal split points (reducing accuracy)
+* This would be a good model if someone wanted to reduce the number of features for whatever reason
+
+RF Model 2 Top 10 Features:
+
+* TotalSF
+* GarageCars
+* ExterQual
+* GrLivArea
+* OverallTotalRating
+* YearBuilt
+* BsmtQual
+* GarageArea
+* KitchenQual
+* TotalBaths
+
+NN Model 1 (base model):
+
+* Higher RMSE and lower R Squared: fair, but smaller explanatory power (did not perform terribly by any means, but did perform worse than all RF models)
+* Overfitting might've occurred causing the accuracy to decrease
+* Possibly not enough data to capture the intricate patterns and relationships within the data
+* Task could be too simple for this model to perform well
+* Optimal parameters potentially not chosen
+* Data preprocessing caused a lot feature variables
+* Almost impossible to interpret
+
+NN Model 2 (increased hidden nodes):
+
+* Very high RMSE and lower R Squared: poor explanatory power (using logs actually produced NAs), did not capture the data well
+* Overfitting might've occurred causing the accuracy to decrease
+* Possibly not enough data to capture the intricate patterns and relationships within the data
+* Task could be too simple for this model to perform well
+* Optimal parameters potentially not chosen
+* Data preprocessing caused a lot feature variables
+* Almost impossible to interpret
+
+NN Model 3 (SmoothReLU + 2nd layer):
+
+* Very high RMSE and lower R Squared: extremely poor explanatory power (using logs actually produced NAs), did not capture the data well
+* Better for a dataset that's very large (smaller dataset would have more shallow network)
+* This combination of parameters didn't fit the data - needs more hyperparameter tuning
+* Almost impossible to interpret
+* Vanishing gradient problem could be happening
+
+NN Model 4 (SmoothReLU):
+
+* Very high RMSE and lower R Squared: extremely poor explanatory power (using logs actually produced NAs), did not capture the data well
+* More hyperparamter tuning is needed to fit the data well such as learning rate and bias
+* Possibly too smooth for the small dataset, causing overfitting
+* NN model might not be the best for this type of problem/dataset
+* Almost impossible to interpret
+* Vanishing gradient problem could be happening
+
+```{r}
+# Comparison table
+all_experiments <- data.frame(
+  Model = c("RF Model 1", "RF Model 2", "RF Model 3", "NN Model 1", "NN Model 2", "NN Model 3", "NN Model 4"),
+  RMSE = c(rf_model1_rmse, rf_model2_rmse, rf_model3_rmse, nn1_rmse, nn2_rmse, nn3_rmse, nn4_rmse),
+  MAE = c(rf_model1_MAE, rf_model2_MAE, rf_model3_MAE, nn1_mae, nn2_mae, nn3_mae, nn4_mae),
+  Rsquared = c(rf_model1_Rsquared, rf_model2_Rsquared, rf_model3_Rsquared, nn1_Rsquared, nn2_Rsquared, nn3_Rsquared, nn4_Rsquared),
+  RMSE_LOG = c(rf_model1_rmse_log, rf_model2_rmse_log, rf_model3_rmse_log, nn1_rmse_log, nn2_rmse_log, nn3_rmse_log, nn4_rmse_log),
+  MAE_LOG = c(rf_model1_MAE_log, rf_model2_MAE_log, rf_model3_MAE_log, nn1_mae_log, nn2_mae_log, nn3_mae_log, nn4_mae_log),
+  Rsquared_LOG = c(rf_model1_Rsquared_log, rf_model2_Rsquared_log, rf_model3_Rsquared_log, nn1_Rsquared_log, nn2_Rsquared_log, nn3_Rsquared_log, nn4_Rsquared_log)
+)
+
+
+all_experiments %>%
+  kbl() %>%
+  kable_styling(full_width = TRUE)
+```
+
+
+
+### 7 Conclusion
+
+To summarize the comparison above, overall random forest models fit this data better. Although, the base model for neural network gave a fairly good performance. For this case, it's possible that this particular regression problem with this sized data is too simple for a neural network. Neural networks work better with unstructured datasets such as images, text and audio. Random forest specifically handle tabular data with high dimensionality very well. Additionally, random forests can even perform well with smaller datasets.
+
+It's entirely possible the neural network could have generated a higher performance, but it would take more manual hyperparameter tuning. A downside of neural networks is that a single incorrect hyperparameter can ruin the model, making NNs very tricky to experiment with (requires many experiments). Some parameters I would try tuning would be the learning rate and bias (for normal backpropagation - wasn't able to do due to timing). In a real world scenario, using a reliable, faster, less computationally expensive and time consuming model, such as the random forest, might work better.
+
+Some additional experiments I would have liked to try if I had the time would be to have a combination of the NN and the RF model where the NN would perform the feature engineering, and then the RF would make the predictions. I also updated the missing variables in this dataset before training the RF models. One other experiment would be to see if the RF performance improved when keeping the missing values. Another thing to try would be removing YearSold, MoSold, etc. since to me, it sounds like data leakage.
+
+Business impact of the final model:
+
+As a business, the top features to pay attention to are (full list can be seen in the model section):
+
+* OverallQual
+* GrLivArea
+* ExterQual
+* GarageCars
+* TotalBsmtSF
+* YearBuilt
+* GarageArea
+* X1stFlrSF
+* KitchenQual
+* X2ndFlrSF
+
+Overall, these features make complete sense. The overall rating/quality and size of a house is what mostly determines the final price. Some other insights from this model are that the order of importance, in terms of specific different areas of the house go Living Area > External > Garage > Basement > First Floor > Kitchen > 2nd Floor > Baths. This tells us that a book, or a house in this case, is judged by it's cover, as just behind Living Area is External. It's interesting that External is both more important than first floor, kitchen and 2nd floor.
+
+As mentioned before, it's also interesting that YearBuilt is a pretty important feature as well. More modern houses will have a higher price. Neighborhood is also fairly low in importance, which doesn't match up with the classic real estate phrase, "location, location, location." Many features have extremely low importance such as Fence, PoolQC, HalfBath.
+
+What's great about this model is that it showcases features that are either higher or lower in importance than expected. Regarding setting up this type of model in production, the best part is not much data preprocessing is needed. If neural network was used in production all that conversion and scaling would need to be done in production as well, increasing the chance of a mishap.
+
