@@ -1,0 +1,1484 @@
+---
+title: "Data 621: Final Project"
+author: "Nakesha Fray, Dhanya Nair, Gillian McGovern"
+date: "2025-12-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#Libraries
+library(kableExtra)
+library(knitr)
+library(readr)
+library(tidyverse)
+library(corrplot)
+library(dplyr)
+library(GGally)
+library(caret)
+library(pROC)
+library(glmnet)
+library(MASS)
+library(car)
+library(correlationfunnel)
+library(faraway)
+library(arm)
+library(performance)
+library(see)
+library(reshape2)
+library(readr)
+#library(tidymodels)
+#library(rms)
+library(smotefamily)
+library(themis)
+library(skimr)
+library(DataExplorer)
+library(naniar)
+library(mice)
+library(corrr)
+library(FactoMineR)
+library(ggcorrplot)
+library(factoextra)
+library(tidyverse)
+library(haven)   
+library(janitor)
+library(e1071)
+library(corrplot)
+library(caret)
+library(ROSE)
+library(smotefamily)
+library(caret)
+library(lmtest)
+```
+
+## 1 Background
+This analysis aims to examine the relationship between cholesterol level and key variables include demographic characteristics (age, sex, race/ethnicity), socioeconomic status, behavioral factors (smoking, alcohol use, physical activity, diet), and clinical measures (HDL, triglycerides, blood pressure, glucose, C-reactive protein) using the National Health and Nutrition Examination Survey (NHANES) 2017-2018 cross-sectional data. The sample of individuals aged 18-80 years will be used to determine which variable most strongly influences cholesterol while accounting for complex population-level variations. 
+
+
+
+## 2 Data Exploration
+
+### 2.1 Data Import
+
+Since the 2017–2018 NHANES cycle contains some of the most complete and up-to-date data, we selected this cycle for our analysis. Within this cycle, we downloaded a set of key modules that capture demographic, behavioral, and clinical information relevant to predicting cholesterol and BMI outcomes. These modules include demographics, smoking status, alcohol use, physical activity, dietary intake, body measurements, blood pressure, glucose, inflammation (CRP), HDL cholesterol, triglycerides, and total cholesterol. Each dataset was imported individually and prepared for merging so that a comprehensive, unified analytic file could be created for building our regression models.
+
+```{r}
+
+load_nhanes <- function(files, cycle = "2017") {
+  
+  base_url <- paste0("https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/", cycle, "/DataFiles/")
+  
+  result <- list()
+  
+  for (f in files) {
+    file_url <- paste0(base_url, f, ".xpt")
+    local_name <- paste0(f, ".XPT")
+    download.file(file_url, local_name, mode = "wb")
+    df <- read_xpt(local_name)
+    result[[f]] <- df
+  }
+  
+  return(result)
+}
+
+files_to_load <- c(
+  "DEMO_J",   # Demographics
+  "SMQ_J",    # Smoking
+  "ALQ_J",    # Alcohol
+  "PAQ_J",    # Physical activity
+  "DR1TOT_J", # Diet (calories, fat, sodium)
+  "BMX_J",    # Body measures (BMI)
+  "BPX_J",    # Blood pressure
+  "GLU_J",    # Glucose
+  "HSCRP_J",  # CRP
+  "HDL_J",    # HDL cholesterol
+  "TRIGLY_J",  # Triglycerides
+  "TCHOL_J"   # Total Cholesterol
+)
+
+nhanes_list <- load_nhanes(files_to_load)
+
+demo     <- nhanes_list$DEMO_J
+smoking  <- nhanes_list$SMQ_J
+alcohol  <- nhanes_list$ALQ_J
+physact  <- nhanes_list$PAQ_J
+diet     <- nhanes_list$DR1TOT_J
+bmx      <- nhanes_list$BMX_J
+bp       <- nhanes_list$BPX_J
+glucose  <- nhanes_list$GLU_J
+crp      <- nhanes_list$HSCRP_J
+hdl      <- nhanes_list$HDL_J
+trig     <- nhanes_list$TRIGLY_J
+chol     <- nhanes_list$TCHOL_J
+```
+
+### 2.2 Data Cleaning
+
+After loading the individual NHANES datasets, we merged them into a single analytic dataset using the respondent identifier SEQN, which is shared across all NHANES modules. Once all modules were combined, we restricted the sample to adults aged 18 years and older and created derived physical activity variables representing vigorous, moderate, and sedentary minutes per day. Finally, we selected the key demographic, behavioral, dietary, and clinical variables needed for modeling, including predictors such as age, gender, race/ethnicity, socioeconomic indicators, lifestyle behaviors, and biomarkers, along with total cholesterol, lbxtc, as the primary outcome.
+
+Features:
+
+* ridageyr: Age
+* riagendr: Gender
+* ridreth3: Race/Ethnicity
+* dmdeduc2: Education
+* indfmpir: Income/Poverty ratio
+* smq020: Smoking status
+* alq111: Alcohol use
+* vigorous_minutes
+* moderate_minutes
+* sedentary_minutes
+* dr1tkcal: Total calories
+* dr1ttfat: Total fat
+* dr1tsodi: Sodium
+* bmxbmi: BMI
+* bpxsy1: Systolic BP
+* bpxdi1: Diastolic BP
+* lbxglu: Glucose
+* lbxhscrp: CRP
+* lbdhdd: HDL
+* lbxtr: Triglycerides
+* lbxtc: Total Cholesterol (target)
+
+```{r}
+# Merge data
+
+demo <- nhanes_list$DEMO_J %>% 
+  janitor::clean_names()
+
+# Start with demographics
+nhanes_master <- demo
+
+# Merge BMI
+nhanes_master <- nhanes_master %>%
+  left_join(janitor::clean_names(nhanes_list$BMX_J), by = "seqn")
+
+# Merge Blood Pressure
+nhanes_master <- nhanes_master %>%
+  left_join(janitor::clean_names(nhanes_list$BPX_J), by = "seqn")
+
+# Merge Glucose
+nhanes_master <- nhanes_master %>%
+  left_join(janitor::clean_names(nhanes_list$GLU_J), by = "seqn")
+
+# Merge CRP
+nhanes_master <- nhanes_master %>%
+  left_join(janitor::clean_names(nhanes_list$HSCRP_J), by = "seqn")
+
+# Merge HDL
+nhanes_master <- nhanes_master %>%
+  left_join(janitor::clean_names(nhanes_list$HDL_J), by = "seqn")
+
+# Merge Triglycerides
+nhanes_master <- nhanes_master %>%
+  left_join(janitor::clean_names(nhanes_list$TRIGLY_J), by = "seqn")
+
+# Merge Smoking
+nhanes_master <- nhanes_master %>%
+  left_join(janitor::clean_names(nhanes_list$SMQ_J), by = "seqn")
+
+# Merge Alcohol
+nhanes_master <- nhanes_master %>%
+  left_join(janitor::clean_names(nhanes_list$ALQ_J), by = "seqn")
+
+# Merge Physical Activity
+nhanes_master <- nhanes_master %>%
+  left_join(janitor::clean_names(nhanes_list$PAQ_J), by = "seqn")
+
+# Merge Diet (calories, fat, sodium)
+nhanes_master <- nhanes_master %>%
+  left_join(janitor::clean_names(nhanes_list$DR1TOT_J), by = "seqn")
+
+# Merge Diet (calories, fat, sodium)
+nhanes_master <- nhanes_master %>%
+  left_join(janitor::clean_names(nhanes_list$TCHOL_J), by = "seqn")
+
+
+# Filter for adults only
+nhanes_model <- nhanes_master %>%
+  filter(ridageyr >= 18) %>%
+  mutate(
+    vigorous_minutes = coalesce(pad615, 0) + coalesce(pad660, 0),  # Vigorous activity (work + recreation)
+    moderate_minutes = coalesce(pad630, 0) + coalesce(pad675, 0) + coalesce(pad645, 0), # Moderate activity (work + recreation + transportation)
+    sedentary_minutes = coalesce(pad680, 0) # Sedentary minutes
+  )
+
+# Select Variables for Modeling
+
+nhanes_model2 <- nhanes_model %>%
+  dplyr::select(
+    seqn,
+    ridageyr,        # Age
+    riagendr,        # Gender
+    ridreth3,        # Race/Ethnicity
+    dmdeduc2,        # Education
+    indfmpir,        # Income/Poverty ratio
+    smq020,          # Smoking status
+    alq111,          # Alcohol use
+    vigorous_minutes,
+    moderate_minutes,
+    sedentary_minutes,
+    dr1tkcal,        # Total calories
+    dr1ttfat,        # Total fat
+    dr1tsodi,        # Sodium
+    bmxbmi,          # BMI
+    bpxsy1, bpxdi1,  # Systolic & Diastolic BP
+    lbxglu,          # Glucose
+    lbxhscrp,         # CRP
+    lbdhdd,          # HDL
+    lbxtr,         # Triglycerides
+    lbxtc            # Total Cholesterol (target)
+  )
+
+```
+
+### 2.3 Data Distribution
+
+To assess the structure and distribution of our variables, we began by generating summary statistics for all predictors in the dataset. We then visualized numerical features using histograms to examine normality, skewness, and potential outliers. Boxplots were created for key categorical variables to show how total cholesterol differs across demographic and behavioral groups. Finally, we plotted the distribution of the target variable—total cholesterol—to evaluate its overall shape before modeling. These exploratory steps provide a clear understanding of the data and help verify assumptions for regression analysis.
+
+Several continuous variables in the dataset exhibit skewed distributions that may affect regression modeling:
+
+ - C-reactive protein (lbxhscrp) shows extreme right skew, with a median of approximately 1.94 mg/L and a maximum of 182 mg/L.  
+ - Triglycerides (lbxtr) are also right-skewed, with a median of 94 mg/dL and a maximum of 2684 mg/dL.  
+ - Dietary variables such as total calories (dr1tkcal) and total fat intake (dr1ttfat) display mild to moderate skew due to some extreme high values.  
+ - Sodium intake (dr1tsodi) is highly right-skewed, with a maximum value of around 25,949 mg.  
+ 
+These variables may benefit from log-transformations or other normalization techniques prior to modeling.
+
+```{r}
+
+# Summary statistics
+nhanes_model2 %>%
+  summary() %>%
+  kable(caption = "Descriptive Statistics of Predictor Variables") %>%
+  kable_styling()
+
+# Plot histograms of all numeric variables in data_train
+nhanes_model2 |>
+  dplyr::select(where(is.numeric)) |>
+  pivot_longer(cols = everything(), names_to = "Feature", values_to = "Value") |>
+  filter(!is.na(Value)) |>
+  ggplot(aes(x = Value)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  facet_wrap(~Feature, scales = "free") +
+  labs(title = "Histograms of Numerical Features", x = NULL, y = "Frequency") +
+  theme_minimal()
+
+# Box plot of categorical variables
+categorical_vars <- c("riagendr", "ridreth3", "dmdeduc2", "smq020", "alq111")
+
+for (var in categorical_vars) {
+  print(
+    ggplot(nhanes_model2, aes_string(x = var, y = "lbxtc")) +
+      geom_boxplot(fill = "steelblue", color = "black") +
+      labs(
+        title = paste("Total Cholesterol by", var),
+        x = var,
+        y = "Total Cholesterol (mg/dL)"
+      ) +
+      theme_minimal()
+  )
+}
+
+# Target variable distribution (Total Cholesterol)
+ggplot(nhanes_model2, aes(x = lbxtc)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "black") +
+  labs(title = "Distribution of Total Cholesterol (mg/dL)", x = "Total Cholesterol", y = "Count") +
+  theme_minimal()
+
+
+```
+
+## 3. Data Preparation
+
+### 3.1 Fix Missing Values
+
+To prepare the dataset for modeling, we first removed any observations with missing values in the target variable, total cholesterol. Next, we addressed missingness in the predictors. Variables with moderate missingness were replaced with their median values, while categorical variables were imputed using the most frequent category. For variables with higher levels of missingness, we applied MICE using predictive mean matching, allowing more accurate estimation based on relationships among variables. 
+
+```{r}
+
+## Look at data
+
+# Structure of the data 
+str(nhanes_model2)
+
+# Glimpse of the data
+head(nhanes_model2)
+
+# Count missing values per Variable
+nhanes_model2 %>%
+  summarise_all(~ sum(is.na(.))) %>%
+  pivot_longer(cols = everything(), names_to = "variable", values_to = "missing_count") %>%
+  filter(missing_count != 0) %>%
+  arrange(desc(missing_count)) 
+
+colSums(is.na(nhanes_model2))
+
+# Keep only rows where Total Cholesterol is observed
+nhanes_model2 <- nhanes_model2 %>% 
+  filter(!is.na(lbxtc))
+
+
+medium_numeric <- c("indfmpir","dr1tkcal","dr1ttfat","dr1tsodi",
+                    "bmxbmi","bpxsy1","bpxdi1","lbxhscrp","lbdhdd")
+medium_categorical <- c("dmdeduc2","alq111")
+
+high_missing <- c("lbxglu","lbxtr")
+
+## Median Imputations
+
+# Numeric
+for(v in medium_numeric){
+  nhanes_model2[[v]][is.na(nhanes_model2[[v]])] <- median(nhanes_model2[[v]], na.rm = TRUE)
+}
+
+# Categorical
+for(v in medium_categorical){
+  mode_val <- as.numeric(names(sort(table(nhanes_model2[[v]]), decreasing = TRUE)[1]))
+  nhanes_model2[[v]][is.na(nhanes_model2[[v]])] <- mode_val
+}
+
+# Mice Imputations
+
+# Select only high missing numeric variables + all predictors
+mice_vars <- c(high_missing, medium_numeric, "vigorous_minutes", "moderate_minutes", "sedentary_minutes")
+
+# Run MICE
+mice_data <- mice(nhanes_model2[mice_vars], m = 5, method = "pmm", seed = 123)
+
+# Complete the dataset using first imputed dataset
+nhanes_model2[mice_vars] <- complete(mice_data, 1)
+
+
+colSums(is.na(nhanes_model2))
+```
+
+### 3.3 Identifying Outliers
+
+The boxplots reveal that several variables, particularly total cholesterol (lbxtc), triglycerides (lbxtr), LDL cholesterol (lbdldl), and nutrient/weight totals, exhibit pronounced high-end outliers with long upper whiskers and many points far above the main distribution. These patterns reflect right-skewed distributions and natural physiological or dietary variability in the population rather than errors. Other variables, such as blood pressure, hemoglobin, and BMI, show moderate high outliers, while some nutrient or BMI measures have only a few scattered extremes. Overall, the most prominent outliers are concentrated in biomarkers and nutrient totals, which could influence regression models if unaddressed. These findings suggest the need for careful handling, such as log transformation or robust modeling approaches, rather than outright removal, to ensure valid and generalizable analytical results.
+
+```{r}
+# Boxplot of lbxtc
+
+nhanes_model2 |>
+  dplyr::select(lbxtc) |>
+  ggplot(aes(x = "", y = lbxtc)) + 
+  geom_boxplot(fill="pink") + 
+  labs(title = "Distribution of Total Cholesterol", y = "Total Cholesterol mg/dL") +  
+  theme_minimal()
+
+# Boxplots of all predictors 
+
+ggplot(stack(nhanes_model2[,-1]), aes(x = ind, y = values)) + 
+  geom_boxplot(fill = "darkgrey") +
+  coord_cartesian(ylim = c(0, 1000)) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.background = element_rect(fill = 'grey96')) +
+  labs(title = "Boxplots of Predictor Variables", x="Predictors")
+
+nhanes_model2 %>%
+  dplyr::select(where(is.numeric)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") %>%
+  ggplot(aes(x = Variable, y = Value)) +
+  geom_boxplot(fill = "grey70") +
+  coord_cartesian(ylim = c(0, 500)) +   # Adjust depending on variable range
+  labs(
+    title = "Boxplots of Numeric Predictor Variables",
+    x = "Predictors",
+    y = "Value"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+```
+
+### 3.4 Tranformations and Factoring
+
+To address skewness and high-end outliers in the NHANES dataset, we applied log transformations to several right-skewed variables. Specifically, CRP (lbxhscrp), triglycerides (lbxtr), total cholesterol (lbxtc), HDL cholesterol (lbdhdd), glucose (lbxglu), BMI (bmxbmi), and dietary intake variables such as total calories (dr1tkcal), total fat (dr1ttfat), and sodium (dr1tsodi) were log-transformed. A small constant was added to each variable to avoid taking the logarithm of zero. These transformations reduce the influence of extreme values, improve the symmetry of distributions, and stabilize variance, thereby helping to meet the assumptions of linear regression and supporting more reliable model estimation.
+
+In addition to transforming skewed numeric variables, we converted key categorical variables into factor type for modeling. Specifically, gender (riagendr) was labeled as “Male” and “Female,” while race/ethnicity (ridreth3), education level (dmdeduc2), smoking status (smq020), and alcohol use (alq111) were converted to factor variables without changing their original coding. This ensures that these categorical predictors are properly treated in regression models, allowing R to handle them as discrete groups rather than continuous numeric values, which improves interpretation and model performance.
+
+```{r}
+# tranform skewed variables
+
+# Log-transform skewed variables, adding a small constant to avoid log(0)
+nhanes_model3 <- nhanes_model2 %>%
+  mutate(
+    log_lbxhscrp = log(lbxhscrp + 0.01),
+    log_lbxtr = log(lbxtr + 0.01),
+    log_dr1tkcal = log(dr1tkcal + 1),
+    log_dr1tsodi= log(dr1tsodi + 1),
+    log_dr1ttfat = log(dr1ttfat + 1),
+    log_lbxtc = log(lbxtc + 0.01),
+    log_lbdhdd = log(lbdhdd + 0.01),
+    log_lbxglu = log(lbxglu + 0.01),
+    log_bmxbmi = log(bmxbmi + 0.01)
+  )
+
+log_vars <- c("log_lbxhscrp","log_lbxtr","log_dr1tkcal","log_dr1tsodi","log_dr1ttfat",
+              "log_lbxtc","log_lbdhdd","log_lbxglu","log_bmxbmi")
+
+nhanes_model3 %>%
+  dplyr::select(all_of(log_vars)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") %>%
+  ggplot(aes(x = Value)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  facet_wrap(~Variable, scales = "free") +
+  labs(title = "Histograms of Log-Transformed Variables", x = NULL, y = "Frequency") +
+  theme_minimal()
+
+
+# Factor categorical variables
+nhanes_model4 <- nhanes_model3 %>%
+  mutate(
+    riagendr = factor(riagendr, labels = c("Male", "Female")),
+    ridreth3 = factor(ridreth3),
+    dmdeduc2 = factor(dmdeduc2),
+    smq020   = factor(smq020),
+    alq111   = factor(alq111)
+  )
+```
+
+#### 3.4 Checking for linear relationship
+
+To evaluate the suitability of linear regression for predicting total cholesterol, we examined the relationships between each numeric predictor and the target variable (lbxtc) using scatterplots and Pearson correlation coefficients. Variables with stronger correlations may be more informative for the regression model, while variables with very weak correlations may contribute less predictive value or require further transformation.
+
+Across the scatterplots, most numeric predictors exhibit very weak or negligible linear relationships with total cholesterol, as reflected by near-zero Pearson correlation coefficients. Variables such as physical activity (vigorous, moderate, sedentary minutes), dietary intakes (calories, fat, sodium), and demographic characteristics show little predictive power individually. A few clinical variables—particularly systolic and diastolic blood pressure (bpxsy1, bpxdi1) and log-transformed triglycerides (log_trig)—display mild positive associations with cholesterol, but these relationships are weak and accompanied by substantial scatter. Overall, the plots suggest that total cholesterol is largely uncorrelated with most individual predictors, with only modest positive trends observed for a few clinical measures.
+
+```{r}
+
+# Get all numeric predictor variables (excluding total cholesterol)
+predictors <- names(nhanes_model4)[sapply(nhanes_model4, is.numeric) & names(nhanes_model4) != "lbxtc"]
+
+# Set up plotting parameters for multiple plots
+par(mfrow = c(4, 4), mar = c(4, 4, 3, 2))
+
+# Plot each predictor vs total cholesterol
+for(i in 1:length(predictors)) {
+  predictor <- predictors[i]
+  correlation <- cor(nhanes_model4[[predictor]], nhanes_model4$lbxtc, use = "complete.obs")
+  
+  plot(nhanes_model4[[predictor]], nhanes_model4$lbxtc,
+       xlab = predictor,
+       ylab = "Total Cholesterol",
+       main = paste(predictor, "\n(r =", round(correlation, 3), ")"),
+       pch = 16,
+       col = ifelse(correlation > 0, "darkblue", "darkred"),
+       cex = 0.6)
+  
+  # Add regression line
+  abline(lm(nhanes_model4$lbxtc ~ nhanes_model4[[predictor]]), 
+         col = "red", lwd = 2)
+  
+  # Add correlation text
+  text(x = quantile(nhanes_model4[[predictor]], 0.05, na.rm = TRUE), 
+       y = quantile(nhanes_model4$lbxtc, 0.95, na.rm = TRUE),
+       labels = paste("r =", round(correlation, 3)),
+       cex = 0.8, col = "red")
+}
+
+# Reset plotting parameters
+par(mfrow = c(1, 1), mar = c(5, 4, 4, 2))
+
+```
+
+#### 3.5 Identifying Correlations
+
+The correlations between total cholesterol (lbxtc) and other variables in the dataset are generally modest.
+
+ - HDL cholesterol (lbdhdd) shows the strongest positive correlation at 0.19
+ - Followed by log-transformed triglycerides (log_trig) and blood pressure measures (bpxdi1 and bpxsy1), each around 0.13. Age (ridageyr).
+ - Log-transformed CRP (log_crp), and income-to-poverty ratio (indfmpir) show weak positive correlations ranging from 0.05 to 0.10. 
+ 
+Strong Positive Correlations:
+
+ - dr1tkcal/dr1ttfat	0.89 (Calories and Total Fat Intake - more fat indicates more calories)
+ - dr1tkcal/dr1tsodi	0.80 (Calories and Total Sodium Intake - more sodium indicates more calories)
+ - dr1ttfat/dr1tsodi	0.76 (Total Fat and Sodium Intake -more fat indicates more sodium)
+ - ridageyr/bpxsy1	0.47 (Higher age indicates higher systolic bp)
+
+Negative Correlations:
+
+ - lbdhdd/lbxtr	-0.31 (Higher HDL, lower Triglycerides)
+ - bmxbmi/lbdhdd	-0.27 (Higher BMI, lower HDL)
+ - lbxglu/lbdhdd	-0.18 (Higher Glucose, lower HDL)
+
+Moderate Correlations:
+
+ - BMI and CRP (bmxBMI ↔ lbxhscrp)
+ - Systolic and Diastolic Blood Pressure
+
+Weak or Near-Zero Correlations:
+
+ - Physical activity measures (vigorous_minutes, moderate_minutes, sedentary_minutes) show very small correlations with most metabolic markers.
+ - Demographic and lifestyle variables like age, gender, education, and alcohol use also show minimal linear correlation with total cholesterol.
+
+Most other lifestyle and dietary variables, including BMI, physical activity, total calories, fat, and sodium intake, have correlations near zero or slightly negative, indicating minimal linear association with total cholesterol in this dataset. Overall, these results suggest that cholesterol levels are more strongly associated with clinical biomarkers (HDL, triglycerides, blood pressure) than with demographic, lifestyle, or dietary factors.
+
+
+```{r, fig.width=8, fig.height=8, warning=FALSE, message=FALSE}
+# ORIGINAL PREDICTORS DATASET
+
+# log_vars is "log_crp","log_trig","log_calories","log_sodium","log_fat", "log_chol","log_hdl", "log_glucose", "log_bmi"
+nhanes_model4_original <- nhanes_model4 |>
+  dplyr::select(-any_of(log_vars))
+
+
+df_character_wide <- nhanes_model4_original %>%
+  select_if(function(col) !is.numeric(col) | all(col == .$lbxtc)) %>%
+  pivot_longer(cols = -lbxtc, names_to = "variable", values_to = "value")
+
+df_character_wide %>%
+  ggplot(aes(x = value, y = lbxtc)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90))
+
+numeric_vars <- nhanes_model4_original %>% dplyr::select(where(is.numeric))
+cor_matrix <- cor(numeric_vars, use = "pairwise.complete.obs")
+
+# Correlation with total cholesterol
+corr_target <- cor_matrix[, "lbxtc"]
+corr_target_sorted <- sort(corr_target, decreasing = TRUE)
+
+kable(as.data.frame(corr_target_sorted), col.names = c("Correlation with Total Cholesterol"), digits = 2)
+
+# corrplot::corrplot(cor_matrix, method = "color", type = "upper",
+#          tl.col = "black", tl.srt = 45, addCoef.col = "black",
+#          number.cex = 0.7, diag = FALSE)
+corrplot::corrplot(cor_matrix,
+        method = "circle",
+        type = "upper",
+        tl.cex = 0.5,
+        tl.srt = 45) # Rotate text diagonally
+
+# Remove self-correlation
+corr_target_no_self <- corr_target[names(corr_target) != "lbxtc"]
+
+# Top 3 positive and negative correlations
+top_pos <- sort(corr_target_no_self, decreasing = TRUE)[1:3]
+top_neg <- sort(corr_target_no_self, decreasing = FALSE)[1:3]
+
+combined_df <- data.frame(
+  Feature = c(names(top_pos), names(top_neg)),
+  Correlation = c(top_pos, top_neg)
+) %>% 
+  mutate(Direction = ifelse(Correlation > 0, "Positive", "Negative"))
+
+ggplot(combined_df, aes(x = reorder(Feature, Correlation), y = Correlation, fill = Direction)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_fill_manual(values = c("Positive" = "skyblue", "Negative" = "salmon")) +
+  labs(title = "Top Features Correlated with Total Cholesterol",
+       x = "Feature",
+       y = "Correlation with Total Cholesterol",
+       fill = "Direction") +
+  theme_minimal()
+
+# Correlation among predictors
+melt_cor <- melt(cor_matrix)
+melt_cor <- melt_cor |>
+  filter(Var1 != "SalePrice") |>
+  filter(Var2 != "SalePrice")
+filtered_cor <- melt_cor[melt_cor$Var1 != melt_cor$Var2 & as.numeric(melt_cor$Var1) < as.numeric(melt_cor$Var2), ]
+sorted_cor <- filtered_cor[order(abs(filtered_cor$value), decreasing = TRUE), ]
+kable(as.data.frame(sorted_cor), digits = 2)
+
+numeric_predictors <- c("ridageyr", "indfmpir", "vigorous_minutes",
+                        "moderate_minutes", "sedentary_minutes", 
+                        "bmxbmi", "bpxsy1", "bpxdi1", "lbxglu", 
+                        "lbxhscrp", "lbdhdd", "lbxtr")
+
+par(mfrow = c(3, 4))
+for (var in numeric_predictors) {
+  boxplot(nhanes_model4[[var]] ~ nhanes_model4$lbxtc, 
+          main = paste(var, "vs Total Cholesterol"), 
+          xlab = "Total Cholesterol", ylab = var, col = "lightblue")
+}
+
+continuous_vars <- nhanes_model4 %>%
+  dplyr::select(
+    lbxtc, ridageyr, indfmpir,
+    vigorous_minutes, moderate_minutes, sedentary_minutes,
+    dr1tkcal, dr1ttfat, dr1tsodi,
+    bmxbmi, bpxsy1, bpxdi1,
+    lbxglu, lbxhscrp, lbdhdd, lbxtr
+  )
+
+# relationships between predictors
+ggpairs(continuous_vars, 
+        progress = FALSE,
+        upper = list(continuous = wrap("cor", size = 3)))
+
+
+```
+
+
+```{r, fig.width=15, fig.height=8, warning=FALSE, message=FALSE}
+# TRANSFORMED PREDICTORS
+
+nhanes_model4_transformed <- nhanes_model4 |>
+  dplyr::select(-c(lbxhscrp, lbxtr, dr1tsodi, dr1tkcal, dr1ttfat, lbdhdd, lbxglu, bmxbmi))
+
+
+df_character_wide <- nhanes_model4_transformed %>%
+  select_if(function(col) !is.numeric(col) | all(col == .$lbxtc)) %>%
+  pivot_longer(cols = -lbxtc, names_to = "variable", values_to = "value")
+
+df_character_wide %>%
+  ggplot(aes(x = value, y = lbxtc)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90))
+
+numeric_vars <- nhanes_model4_transformed %>% dplyr::select(where(is.numeric))
+cor_matrix <- cor(numeric_vars, use = "pairwise.complete.obs")
+
+# Correlation with total cholesterol
+corr_target <- cor_matrix[, "lbxtc"]
+corr_target_sorted <- sort(corr_target, decreasing = TRUE)
+
+kable(as.data.frame(corr_target_sorted), col.names = c("Correlation with Total Cholesterol"), digits = 2)
+
+# corrplot::corrplot(cor_matrix, method = "color", type = "upper",
+#          tl.col = "black", tl.srt = 45, addCoef.col = "black",
+#          number.cex = 0.7, diag = FALSE)
+corrplot::corrplot(cor_matrix,
+        method = "circle",
+        type = "upper",
+        tl.cex = 0.5,
+        tl.srt = 45) # Rotate text diagonally
+
+# Remove self-correlation
+corr_target_no_self <- corr_target[names(corr_target) != "lbxtc"]
+
+# Top 3 positive and negative correlations
+top_pos <- sort(corr_target_no_self, decreasing = TRUE)[1:3]
+top_neg <- sort(corr_target_no_self, decreasing = FALSE)[1:3]
+
+combined_df <- data.frame(
+  Feature = c(names(top_pos), names(top_neg)),
+  Correlation = c(top_pos, top_neg)
+) %>% 
+  mutate(Direction = ifelse(Correlation > 0, "Positive", "Negative"))
+
+ggplot(combined_df, aes(x = reorder(Feature, Correlation), y = Correlation, fill = Direction)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_fill_manual(values = c("Positive" = "skyblue", "Negative" = "salmon")) +
+  labs(title = "Top Features Correlated with Total Cholesterol",
+       x = "Feature",
+       y = "Correlation with Total Cholesterol",
+       fill = "Direction") +
+  theme_minimal()
+
+# Correlation among predictors
+melt_cor <- melt(cor_matrix)
+melt_cor <- melt_cor |>
+  filter(Var1 != "SalePrice") |>
+  filter(Var2 != "SalePrice")
+filtered_cor <- melt_cor[melt_cor$Var1 != melt_cor$Var2 & as.numeric(melt_cor$Var1) < as.numeric(melt_cor$Var2), ]
+sorted_cor <- filtered_cor[order(abs(filtered_cor$value), decreasing = TRUE), ]
+kable(as.data.frame(sorted_cor), digits = 2)
+
+numeric_predictors <- c("ridageyr", "indfmpir", "vigorous_minutes",
+                        "moderate_minutes", "sedentary_minutes", 
+                        "bmxbmi", "bpxsy1", "bpxdi1", "lbxglu", 
+                        "lbxhscrp", "lbdhdd", "lbxtr")
+
+par(mfrow = c(3, 4))
+for (var in numeric_predictors) {
+  boxplot(nhanes_model4[[var]] ~ nhanes_model4$lbxtc, 
+          main = paste(var, "vs Total Cholesterol"), 
+          xlab = "Total Cholesterol", ylab = var, col = "lightblue")
+}
+
+
+# relationships between predictors
+#ggpairs(nhanes_model4_transformed, progress = FALSE)
+```
+
+### 3.4 Adding new features
+
+To enhance the predictive modeling of total cholesterol, several new features were derived from the raw NHANES data. Age was categorized into young (<30), middle-aged (30–65), and older (>65) groups, while BMI was classified into underweight, normal, overweight, and obese categories. Physical activity variables were combined into a total activity measure, and a binary indicator was created to flag participants meeting recommended activity levels. Dietary intake was normalized by creating fat-to-calorie and sodium-to-calorie ratios. Finally, skewed laboratory and dietary variables, including triglycerides, CRP, total calories, fat, and sodium, were log-transformed to reduce skewness and improve model stability. 
+
+```{r}
+
+nhanes_model5 <- nhanes_model4 %>%
+  # Age groups
+  mutate(
+    AGE_YOUNG = as.numeric(ridageyr < 30),
+    AGE_MID = as.numeric(ridageyr >= 30 & ridageyr <= 65),
+    AGE_OLD = as.numeric(ridageyr > 65)
+  ) %>%
+  # BMI categories
+  mutate(
+    BMI_UNDER = as.numeric(bmxbmi < 18.5),
+    BMI_NORMAL = as.numeric(bmxbmi >= 18.5 & bmxbmi < 25),
+    BMI_OVER = as.numeric(bmxbmi >= 25 & bmxbmi < 30),
+    BMI_OBESE = as.numeric(bmxbmi >= 30)
+  ) %>%
+  # Physical activity
+  mutate(
+    TOTAL_ACTIVITY = vigorous_minutes + moderate_minutes,
+    ACTIVE_FLAG = as.numeric(TOTAL_ACTIVITY >= 150)  # Meets 150 min/week guideline
+  ) %>%
+  # Dietary ratios
+  mutate(
+#    FAT_RATIO = ifelse(dr1tkcal > 0, dr1ttfat / dr1tkcal, NA),
+#    SODIUM_RATIO = ifelse(dr1tkcal > 0, dr1tsodi / dr1tkcal, NA)
+    HIGH_FAT_DIET = as.numeric((exp(log_dr1ttfat) * 9 / exp(log_dr1tkcal)) > 0.35),
+    HIGH_SODIUM = as.numeric(exp(log_dr1tsodi) > 2300)
+  ) 
+
+```
+
+## Split Data into Training and Test Sets
+
+To ensure objective model evaluation and prevent overfitting, we split each dataset into training (80%) and testing (20%) sets using a consistent random seed (set.seed(123)) for reproducibility.
+
+```{r}
+set.seed(123)
+
+train_index <- createDataPartition(nhanes_model4$lbxtc, p = 0.8, list = FALSE)
+
+# Create train/test splits for each dataset
+# Removed seqn for each dataset
+
+# Original predictors - removed transformed predictors
+nhanes_model_original <- nhanes_model4 |>
+  dplyr::select(-c(log_lbxhscrp, log_lbxtr, log_dr1tkcal, log_dr1tsodi, log_dr1ttfat, log_lbxtc, log_lbdhdd, log_lbxglu, log_bmxbmi, seqn))
+train_data_original <- nhanes_model_original[train_index, ]
+test_data_original <- nhanes_model_original[-train_index, ]
+
+# transformed predictors - ONLY the transformed predictors (remove transformed target variable log_lbxtc)
+nhanes_model_transformed <- nhanes_model4 |>
+  dplyr::select(-c(lbxhscrp, lbxtr, dr1tkcal, dr1tsodi, dr1ttfat, log_lbxtc, lbdhdd, lbxglu, bmxbmi, seqn))
+train_data_transformed <- nhanes_model_transformed[train_index, ]
+test_data_transformed <- nhanes_model_transformed[-train_index, ]
+
+# transformed predictors + log transformed target variable log_lbxtc
+nhanes_model_transformed_target <- nhanes_model4 |>
+  dplyr::select(-c(lbxhscrp, lbxtr, dr1tkcal, dr1tsodi, dr1ttfat, lbxtc, lbdhdd, lbxglu, bmxbmi, seqn))
+train_data_transformed_target <- nhanes_model_transformed_target[train_index, ]
+test_data_transformed_target <- nhanes_model_transformed_target[-train_index, ]
+
+# new features
+
+nhanes_model_transformed_newfeatures <- nhanes_model5 |>
+    dplyr::select(
+    # Target
+    log_lbxtc,
+    
+    # Demographics (NO seqn)
+    ridageyr, riagendr, ridreth3, dmdeduc2, indfmpir,
+    
+    # Lifestyle
+    smq020, alq111, sedentary_minutes,
+    
+    # NEW FEATURES (activity & diet)
+    TOTAL_ACTIVITY, ACTIVE_FLAG, HIGH_FAT_DIET, HIGH_SODIUM,
+    
+    # Age/BMI categories
+    AGE_YOUNG, AGE_MID,  # AGE_OLD is reference
+    BMI_UNDER, BMI_NORMAL, BMI_OVER,  # BMI_OBESE is reference
+    
+    # Blood pressure (raw values)
+    bpxsy1, bpxdi1,
+    
+    # Biomarkers (LOG versions ONLY - no raw)
+    log_lbxhscrp, log_lbxtr, log_lbdhdd, log_lbxglu
+    
+    )
+
+train_data_transformed_newfeatures <- nhanes_model_transformed_newfeatures[train_index, ]
+test_data_transformed_newfeatures <- nhanes_model_transformed_newfeatures[-train_index, ]
+
+
+```
+
+## 4.Build Models
+
+### Model 1: Multiple Linear Regression - Full model
+
+```{r}
+# Model 1: original predictors + original target variable lbxtc
+set.seed(123)
+model_full <- lm(lbxtc ~ ., data = train_data_original)
+summary(model_full)
+```
+
+### Model 2: Multiple Linear Regression: Full model with Log transformation of the skewed predictors
+
+Using log transformations for lbxhscrp, lbxtr, dr1tkcal, dr1tsodi, dr1ttfat, lbdhdd, lbxglu, and bmxbmi.
+
+```{r}
+# Model 2: LM transformed predictors + original target variable
+set.seed(123)
+
+# Full linear model using log-transformed predictors
+# model_full_log <- lm(lbxtc ~ log_chol + log_hdl + log_bmi + bpxsy1 + bpxdi1 +
+#                        log_glucose + vigorous_minutes + moderate_minutes +
+#                        sedentary_minutes + indfmpir + ridageyr +
+#                        log_crp + log_trig + log_sodium + log_calories + log_fat +
+#                        riagendr + ridreth3 + dmdeduc2 + smq020 + alq111,
+#                      data = train_full_log)
+model_full_transformed <- lm(lbxtc ~ .,
+                     data = train_data_transformed)
+summary(model_full_transformed)
+```
+
+
+### Model 3: Multiple Linear Regression: Full model with Log transformation of the skewed predictors + Log transformation of target variable
+
+
+```{r}
+# Model 3: LM transformed predictors + transformed target variable
+set.seed(123)
+
+# Full linear model using log-transformed predictors and target
+model_full_transformed_target <- lm(log_lbxtc ~ .,
+                     data = train_data_transformed_target)
+
+summary(model_full_transformed_target)
+```
+
+### Model 4: Stepwise AIC on Model 1 (Original data)
+AIC=30412.97
+
+```{r}
+# Model 4
+set.seed(123)
+
+step_model_full <- stats::step(model_full, direction = "both")
+summary(step_model_full)
+```
+
+### Model 5: Stepwise AIC on Model 3 (Log transformed predictors + target)
+
+```{r}
+# Model 5
+set.seed(123)
+
+step_model_full_transformed_target <- stats::step(model_full_transformed_target, direction = "both")
+summary(step_model_full_transformed_target)
+```
+
+### Model 6: Ridge: Log transformed predictors + target
+
+Good for multicollinearity - adds a penalty (L2 regularization)
+
+```{r}
+# Model 6
+set.seed(123)
+
+ridge_model <- train(log_lbxtc ~ ., data = train_data_transformed_target,
+                method = "glmnet",
+                preProcess = c("center", "scale"),
+                trControl = trainControl(method = "cv", number = 10),
+                tuneGrid = expand.grid(alpha = 0, lambda = seq(0, 1, 0.1)))
+summary(ridge_model)
+
+testX <- test_data_transformed_target %>%
+  dplyr::select(-log_lbxtc)
+
+testY <- test_data_transformed_target$log_lbxtc
+
+ridge_pred <- predict(ridge_model, testX)
+ridge_resample <- postResample(ridge_pred, testY)
+ridge_resample
+```
+
+
+### Model 7: Elastic Net: Log transformed predictors + target
+
+```{r}
+# Model 7
+
+set.seed(123)
+# Elastic net
+testX <- test_data_transformed_target %>%
+  dplyr::select(-log_lbxtc)
+
+testY <- test_data_transformed_target$log_lbxtc
+
+enetGrid <- expand.grid(lambda = c(0, 0.01, .1), fraction = seq(.05, 1, length = 20))
+enet_model <- train(log_lbxtc ~ ., data = train_data_transformed_target, method = "enet",
+                 tuneGrid = enetGrid,
+                 trControl = trainControl(method = "cv", number = 10),
+                 preProcess = c("center", "scale"))
+enet_pred <- predict(enet_model, testX)
+enet_resample <- postResample(enet_pred, testY)
+enet_resample
+```
+
+
+### Model 8: Robust Regression: Original Data
+
+
+```{r}
+# Model 8
+set.seed(123)
+# weighting functions to down-weight influential observations
+# default weighting function is Huber
+# uses Iteratively Reweighted Least Squares (IRLS)
+robust_model_full <- rlm(lbxtc ~ ., data = train_data_original, psi = psi.huber)
+summary(robust_model_full)
+```
+
+### Model 9: Robust Regression: Transformed Data
+
+```{r}
+# Model 9
+set.seed(123)
+# weighting functions to down-weight influential observations
+# default weighting function is Huber
+# uses Iteratively Reweighted Least Squares (IRLS)
+robust_model_full_transformed_target <- rlm(log_lbxtc ~ ., data = train_data_transformed_target, psi = psi.huber)
+summary(robust_model_full_transformed_target)
+```
+
+
+### Model 10: Robust Regression: Transformed Data: Bisquare weighting function
+
+```{r}
+# Model 10
+set.seed(123)
+# weighting functions to down-weight influential observations
+# default weighting function is Huber
+# uses Iteratively Reweighted Least Squares (IRLS)
+robust_bisquare_model_full_transformed_target <- rlm(log_lbxtc ~ ., data = train_data_transformed_target, psi = psi.bisquare)
+summary(robust_bisquare_model_full_transformed_target)
+```
+
+
+### Model 12:  Multiple Linear Regression: Log transformation and New features
+
+Age Categories Revealed Non-Linear Pattern as Cholesterol peaks in middle age, then declines in elderly .
+BMI Categories are more informative than Log BMI.
+High Sodium Flag is Significant as HIGH_SODIUM (>2300 mg/day) → -1.93% cholesterol (p = 0.009) and hence the effect is in unexpected direction (negative).
+
+Physical activity and high-fat diet does not have detectable direct effect on cholesterol.
+```{r}
+# Model 12
+set.seed(123)
+model_transformed_newfeatures <- lm(log_lbxtc ~ ., data = 
+train_data_transformed_newfeatures)
+summary(model_transformed_newfeatures)
+
+```
+
+
+### Check for multicollinearity
+
+We know we have some low correlated features, so let's address this potential issue by looking at the VIF for the models and removing predictors.
+
+VIF for LM1: Basic Model  had dr1tkcal and dr1ttfat whose VIF > 5.Hence these predictos should be removed.
+
+For the logistic regression models, luckily no predictor has a VIF > 5 (for Df > 1 (categorical), must look at GVIF^(1/(2*Df)) value), so we don't need to remove any predictors.
+
+```{r}
+# Multiple linear models
+
+cat("=== VIF for LM1: Basic Model ===\n")
+print(car::vif(model_full))
+
+cat("=== VIF for LM2: Transformed predictors + original target variable ===\n")
+print(car::vif(model_full_transformed))
+
+cat("=== VIF for LM3: Transformed predictors + transformed target variable ===\n")
+print(car::vif(model_full_transformed_target))
+
+cat("=== VIF for LM4: Stepwise on Model 1 ===\n")
+print(car::vif(step_model_full))
+
+cat("=== VIF for LM5: Stepwise on Model 3 ===\n")
+print(car::vif(step_model_full_transformed_target))
+
+cat("=== VIF for LM8: Robust: Original ===\n")
+print(car::vif(robust_model_full))
+
+cat("=== VIF for LM9: Robust: Transformed ===\n")
+print(car::vif(robust_model_full_transformed_target))
+
+cat("=== VIF for LM10: Robust: Transformed: Bisquare ===\n")
+print(car::vif(robust_bisquare_model_full_transformed_target))
+
+cat("=== VIF for LM12: Transformed predictors and target + new features ===\n")
+print(car::vif(model_transformed_newfeatures))
+```
+
+
+```{r}
+# Model 1 (original predictors + original target variable lbxtc)
+# Remove dr1tkcal which has highest VIF (above 5)
+set.seed(123)
+model_full_v2 <- lm(lbxtc ~ ., data = train_data_original %>% dplyr::select(-c(dr1tkcal,dr1ttfat)))
+summary(model_full_v2)
+
+car::vif(model_full_v2) # looks good
+```
+
+```{r}
+# Model 2 (transformed predictors + original target variable lbxtc)
+# Remove log_dr1tkcal which has highest VIF (above 5)
+set.seed(123)
+model_full_transformed_v2 <- lm(lbxtc ~ ., data = train_data_transformed %>% dplyr::select(-c(log_dr1tkcal)))
+summary(model_full_transformed_v2)
+
+car::vif(model_full_transformed_v2) # looks good
+```
+
+```{r}
+# Model 3 (transformed predictors + transformed target variable log_lbxtc)
+# Remove log_dr1tkcal which has highest VIF (above 5)
+set.seed(123)
+model_full_transformed_target_v2 <- lm(log_lbxtc ~ ., data = train_data_transformed_target %>% dplyr::select(-c(log_dr1tkcal)))
+summary(model_full_transformed_target_v2)
+
+car::vif(model_full_transformed_target_v2) # looks good
+```
+
+
+```{r}
+# Model 8 robust regression - original
+# Remove dr1tkcal which has highest VIF (above 5)
+set.seed(123)
+robust_model_full_v2 <- rlm(lbxtc ~ ., psi = psi.huber, data = train_data_original %>% dplyr::select(-c(dr1tkcal)))
+summary(robust_model_full_v2)
+
+car::vif(robust_model_full_v2) # looks good
+```
+
+```{r}
+set.seed(123)
+# Model 9 robust regression - transformed
+# Remove log_dr1tkcal which has highest VIF (above 5)
+
+robust_model_full_transformed_target_v2 <- rlm(log_lbxtc ~ ., psi = psi.huber, data = train_data_transformed_target %>% dplyr::select(-c(log_dr1tkcal)))
+summary(robust_model_full_transformed_target_v2)
+
+car::vif(robust_model_full_transformed_target_v2) # looks good
+```
+
+```{r}
+# Model 10
+set.seed(123)
+robust_bisquare_model_full_transformed_target_v2 <- rlm(log_lbxtc ~ ., psi = psi.bisquare, data = train_data_transformed_target %>% dplyr::select(-c(log_dr1tkcal)))
+summary(robust_bisquare_model_full_transformed_target_v2)
+car::vif(robust_bisquare_model_full_transformed_target_v2) # looks good
+```
+
+
+```{r}
+# Model 12
+set.seed(123)
+model_transformed_newfeatures_v2 <- glm(log_lbxtc ~ ., data = train_data_transformed_newfeatures%>% dplyr::select(-c(AGE_YOUNG, ridageyr)))
+
+summary(model_transformed_newfeatures_v2)
+car::vif(model_transformed_newfeatures_v2)
+
+```
+
+### Interpretation of coefficients
+
+Coefficients are presented as multiplicative effects (exponentiated from log-log model), meaning they represent proportional changes in cholesterol.
+* Biomarkers Dominating the prediction are HDL Cholesterol (log_lbdhdd), Triglycerides (log_lbxtr), Glucose (log_lbxglu),CRP/Inflammation (log_lbxhscrp).
+* HDL is a component of total cholesterol, so this positive relationship is biologically expected and is the strongest predictor in your model.
+* Triglycerides contribute to VLDL cholesterol, another component of total cholesterol.
+* Interestingly, Higher glucose associated with LOWER cholesterol.
+* Inflammation and cholesterol are linked .
+* Cholesterol follows an inverted-U trajectory across lifespan as it peaks in middge age(AGE_MID (40-64 years)) and then declines.
+* Overweight individuals(BMI_OVER (25-29.9)) have 1.28% HIGHER cholesterol than obese and hence Lower BMI leads to Lower cholesterol .
+* High sodium diet associated with 2% LOWER cholesterol(HIGH_SODIUM (>2300 mg/day): 0.9800)).
+* Lifestyle changes like Physical Activity, Diet Quality, behaviors like Smoking,Alcohol and Income had no significant effect.
+
+```{r}
+# Logistic Regression Models
+
+# Interpretation of coefficients (Model 1)
+cat("\n=== Coefficient Interpretation (Model 1) ===\n")
+coef_exp <- exp(coef(model_full_v2))
+print(round(coef_exp, 4))
+
+# Interpretation of coefficients (Model 2)
+cat("\n=== Coefficient Interpretation (Model 2) ===\n")
+coef_exp <- exp(coef(model_full_transformed_v2))
+print(round(coef_exp, 4))
+
+# Interpretation of coefficients (Model 3)
+cat("\n=== Coefficient Interpretation (Model 3) ===\n")
+coef_exp <- exp(coef(model_full_transformed_target_v2))
+print(round(coef_exp, 4))
+
+
+# Interpretation of coefficients (Model 10)
+cat("\n=== Coefficient Interpretation (Model 10) ===\n")
+coef_exp <- exp(coef(robust_bisquare_model_full_transformed_target_v2))
+print(round(coef_exp, 4))
+
+# Interpretation of coefficients (Model 12)
+cat("\n=== Coefficient Interpretation (Model 12) ===\n")
+coef_exp <- exp(coef(model_transformed_newfeatures_v2))
+print(round(coef_exp, 4))
+
+```
+
+
+## 5 Select Models
+* Best performing model is LM12( Multiple Linear regression with transformed predictors and target+ new features).
+** It has lowest RMSE (0.2041 on log scale) and highest R² = 0.1215
+** Has the best predictive performance.
+** Provides interpretable coefficients on the log scale.
+** Feature engineering is better than Regularization in this case.
+** Ridge's shrinkage couldn't compensate for missing non-linear patterns
+
+
+* Second best performing Model is LM6 (Ridge with transformed predictors and target) because: 
+** It has RMSE (0.2054) and R² (0.1104). 
+** Has the better predictive performance.
+** Handles multicollinearity among dietary/lipid variables.
+** Is more stable than OLS for correlated predictors.
+
+* Other comparable models are LM10 (Robust bisquare) as its close second with RMSE 0.2057 and R² 0.1078; LM3 (Full transformed) with RMSE 0.2057, R² 0.1070.
+
+* The log transformation of the target (Total Cholesterol) dramatically improved model performance.
+** Original scale models (LM1, LM2): RMSE ~39, R² ~0.09
+** Log-transformed models (LM3+): RMSE ~0.21, R² ~0.10-0.11
+** This makes sense given that cholesterol and many biomarkers follow log-normal distributions.
+
+* Ridge regression (LM6) slightly outperformed OLS, suggesting multicollinearity among predictors (especially the correlated dietary variables).Ridge's shrinkage helps with the correlation among dr1tkcal, dr1ttfat, dr1tsodi, lbdhdd, lbxtr.
+
+* Stepwise models (LM4, LM5) performed worse than full models, indicating important predictors were likely removed.
+The modest R² suggests complex interactions that stepwise doesn't capture well.
+
+* Robust regression (LM9, LM10) performed similarly to OLS (LM3), suggesting Outliers aren't significantly affecting our results.
+
+* The low R² (~0.11) across all models indicates that our predictors explain only about 10-11% of cholesterol variation. 
+** Looks like the Cholesterol is influenced by many factors not in our dataset (maybe genetics, medications, detailed dietary patterns)
+** The relationship may be non-linear or involve complex interactions.
+** This is actually typical for epidemiological data.
+
+```{r}
+# Model 1: Multiple Linear Regression - Full model (post mutilcollinearity updates)
+
+# Check assumptions
+
+# Model Evaluation on Test Set
+print_evaluate_lm_model <- function(model, target_variable, test_data, model_name) {
+
+  preds <- predict(model, newdata = test_data)
+  if (target_variable == "lbxtc") {
+    actual <- test_data$lbxtc
+  } else { # log
+    actual <- test_data$log_lbxtc
+  }
+
+  rmse <- sqrt(mean((preds - actual)^2))
+  mae  <- mean(abs(preds - actual))
+  r2   <- 1 - sum((preds - actual)^2) / sum((actual - mean(actual))^2)
+  aic  <- AIC(model)
+
+  output <- paste(
+    "\n=== Model Selection and Evaluation ===\n\n",
+    "=== ", model_name, " Evaluation ===\n",
+    "RMSE:", round(rmse, 4), 
+    "| MAE:", round(mae, 4),
+    "| R²:", round(r2, 4), "\n",
+    "AIC:", round(aic, 4), "\n\n",
+    sep = " "
+  )
+
+  cat(output)
+}
+
+print_lm_model_diagnostics <- function(model, train_data, model_name) {
+
+  cat("\n=== Diagnostics for", model_name, "===\n")
+  
+  # Histogram of residuals
+  ggplot(data = as.data.frame(residuals(model)), aes(x = residuals(model))) +
+  geom_histogram(bins = 25, fill = "skyblue", color = "black") +
+  xlab("Residuals") +
+  ggtitle(paste("Residual Histogram -", model_name))
+  
+  # Residuals vs Fitted
+  plot(model, which = 1, main = paste("Residuals vs Fitted -", model_name))
+  
+  # Q-Q Plot
+  plot(model, which = 2, main = paste("Normal Q-Q Plot -", model_name))
+  
+  # Scale-Location Plot
+  plot(model, which = 3, main = paste("Scale-Location Plot -", model_name))
+  
+  # Residuals vs Leverage
+  plot(model, which = 5, main = paste("Residuals vs Leverage -", model_name))
+  
+  # Cook's Distance
+  try(plot(model, which = 4, main = paste("Cook's Distance -", model_name)), silent = TRUE)
+  # plot(model, which = 4, main = paste("Cook's Distance -", model_name))
+  
+  # Heteroscedasticity test
+  print("Heteroscedasticity test:")
+  print(bptest(model))
+  
+  # High leverage cutoff
+  p <- length(coef(model))
+  n <- nrow(train_data)
+  high_lev <- (2 * (p+1)) / n
+  cat("High leverage threshold:", round(high_lev, 5), "\n")
+  
+  # Half-normal plot of leverage values
+  try(halfnorm(hatvalues(model), main = paste("Half-Normal Plot of Leverage -", model_name)), silent = TRUE)
+}
+
+# === LM1 Evaluation ===
+print_evaluate_lm_model(model_full_v2, "lbxtc", test_data_original, "LM1: Full model")
+print_lm_model_diagnostics(model_full_v2, train_data_original, "LM1: Full model")
+```
+
+```{r}
+# Model 2: Multiple Linear Regression: Full model with Log transformation of the skewed predictors
+
+# Check assumptions
+
+# === LM2 Evaluation ===
+print_evaluate_lm_model(model_full_transformed_v2, "lbxtc", test_data_transformed, "LM2: Full model (Transformed Predictors)")
+print_lm_model_diagnostics(model_full_transformed_v2, train_data_transformed, "LM2: Full model (Transformed Predictors)")
+```
+
+
+```{r}
+# Model 3: Multiple Linear Regression: Full model with Log transformation of the skewed predictors + Log target
+
+# Check assumptions
+
+# === LM3 Evaluation ===
+print_evaluate_lm_model(model_full_transformed_target_v2, "log_lbxtc", test_data_transformed_target, "LM3: Full model (Transformed Predictors + Target)")
+print_lm_model_diagnostics(model_full_transformed_target_v2, train_data_transformed_target, "LM3: Full model (Transformed Predictors + Target)")
+```
+
+
+```{r}
+# Model 4: Stepwise on Model 1
+
+# Check assumptions
+
+# === LM4 Evaluation ===
+print_evaluate_lm_model(step_model_full, "lbxtc", test_data_original, "LM4: Stepwise Model 1")
+print_lm_model_diagnostics(step_model_full, train_data_original, "LM4: Stepwise Model 1")
+```
+
+```{r}
+# Model 5: Stepwise on Model 5
+
+# Check assumptions
+
+# === LM5 Evaluation ===
+print_evaluate_lm_model(step_model_full_transformed_target, "log_lbxtc", test_data_transformed_target, "LM5: Stepwise Model 5")
+print_lm_model_diagnostics(step_model_full_transformed_target, train_data_transformed_target, "LM5: Stepwise Model 5")
+```
+
+
+```{r}
+# Model 6 - Ridge
+testX <- test_data_transformed_target %>%
+  dplyr::select(-log_lbxtc)
+testY <- test_data_transformed_target$log_lbxtc
+ridge_pred <- predict(ridge_model, testX)
+ridge_resample <- postResample(ridge_pred, testY)
+ridge_rmse <- ridge_resample["RMSE"]
+ridge_Rsquared <- ridge_resample["Rsquared"]
+ridge_MAE <- ridge_resample["MAE"]
+
+ridge_output <- paste(
+    "\n=== Model Selection and Evaluation ===\n\n",
+    "=== LM6: Ridge Evaluation ===\n",
+    "RMSE:", round(ridge_rmse, 4), 
+    "| R²:", round(ridge_Rsquared, 4),
+    "| MAE:", round(ridge_MAE, 4),
+    "\n\n",
+    sep = " "
+  )
+cat(ridge_output)
+```
+
+
+```{r}
+# Model 7 - Elastic Net
+testX <- test_data_transformed_target %>%
+  dplyr::select(-log_lbxtc)
+testY <- test_data_transformed_target$log_lbxtc
+enet_pred <- predict(enet_model, testX)
+enet_resample <- postResample(enet_pred, testY)
+enet_rmse <- enet_resample["RMSE"]
+enet_Rsquared <- enet_resample["Rsquared"]
+enet_MAE <- enet_resample["MAE"]
+# enet_aic  <- AIC(enet_model)
+
+enet_output <- paste(
+    "\n=== Model Selection and Evaluation ===\n\n",
+    "=== LM7: Elastic Net Evaluation ===\n",
+    "RMSE:", round(enet_rmse, 4), 
+    "| R²:", round(enet_Rsquared, 4),
+    "| MAE:", round(enet_MAE, 4),
+    "\n\n",
+    sep = " "
+  )
+cat(enet_output)
+
+```
+
+
+
+
+```{r}
+# Model 8: Robust regression - original
+
+# Check assumptions
+
+# === LM8 Evaluation ===
+print_evaluate_lm_model(robust_model_full_v2, "lbxtc", test_data_original, "LM8: Robust model (Original)")
+# reason for try: not every graph is for robust regression, so just print out the graphs R can print
+try(print_lm_model_diagnostics(robust_model_full_v2, train_data_original, "LM8: Robust model (Original)"), silent=TRUE)
+```
+
+```{r}
+# Model 9: Robust regression - transformed
+
+# Check assumptions
+
+# === LM9 Evaluation ===
+print_evaluate_lm_model(robust_model_full_transformed_target_v2, "log_lbxtc", test_data_transformed_target, "LM9: Robust model (Transformed Predictors + Target)")
+try(print_lm_model_diagnostics(robust_model_full_transformed_target_v2, train_data_transformed_target, "LM9: Robust model (Transformed Predictors + Target)"), silent=TRUE)
+```
+
+```{r}
+# Model 10: Robust regression - transformed, bisquare
+
+# Check assumptions
+
+# === LM10 Evaluation ===
+print_evaluate_lm_model(robust_bisquare_model_full_transformed_target_v2, "log_lbxtc", test_data_transformed_target, "LM10: Robust model (Transformed Predictors + Target, bisquare)")
+try(print_lm_model_diagnostics(robust_bisquare_model_full_transformed_target_v2, train_data_transformed_target, "LM10: Robust model (Transformed Predictors + Target, bisquare)"), silent=TRUE)
+```
+
+
+
+```{r}
+# === LM12 Evaluation ===
+print_evaluate_lm_model(model_transformed_newfeatures_v2, "log_lbxtc",test_data_transformed_newfeatures, "LM12: Transformed predictors and target + New features")
+print_lm_model_diagnostics(model_transformed_newfeatures_v2,train_data_transformed_newfeatures,"LM12: Transformed predictors and target + New features")
+
+
+```
+
+```{r}
+# Results table
+
+evaluate_lm_model <- function(model, target_variable, test_data, model_name) {
+
+  preds <- predict(model, newdata = test_data)
+  if (target_variable == "lbxtc") {
+    actual <- test_data$lbxtc
+  } else { # log
+    actual <- test_data$log_lbxtc
+  }
+
+  rmse <- sqrt(mean((preds - actual)^2))
+  mae  <- mean(abs(preds - actual))
+  r2   <- 1 - sum((preds - actual)^2) / sum((actual - mean(actual))^2)
+  aic  <- AIC(model)
+
+  return(data.frame(
+    Model = model_name,
+    RMSE = round(rmse, 4),
+    MAE = round(mae, 4),
+    R_squared = round(r2, 4),
+    AIC = round(aic, 4)
+  ))
+}
+
+ridge_df <- data.frame(
+    Model = "LM6: Ridge (Predictors + Target)",
+    RMSE = round(ridge_rmse, 4),
+    MAE = round(ridge_MAE, 4),
+    R_squared = round(ridge_Rsquared, 4),
+    AIC = NA
+  )
+enet_df <- data.frame(
+    Model = "LM7: Elastic Net (Predictors + Target)",
+    RMSE = round(enet_rmse, 4),
+    MAE = round(enet_MAE, 4),
+    R_squared = round(enet_Rsquared, 4),
+    AIC = NA
+  )
+
+comparison <- rbind(
+  evaluate_lm_model(model_full_v2, "lbxtc", test_data_original, "LM1: Full model"),
+  evaluate_lm_model(model_full_transformed_v2, "lbxtc", test_data_transformed, "LM2: Full model (Transformed Predictors)"),
+  evaluate_lm_model(model_full_transformed_target_v2, "log_lbxtc", test_data_transformed_target, "LM3: Full model (Transformed Predictors + Target)"),
+  evaluate_lm_model(step_model_full, "lbxtc", test_data_original, "LM4: Stepwise Model 1"),
+  evaluate_lm_model(step_model_full_transformed_target, "log_lbxtc", test_data_transformed_target, "LM5: Stepwise Model 3"),
+  ridge_df,
+  enet_df,
+  evaluate_lm_model(robust_model_full_v2, "lbxtc", test_data_original, "LM8: Robust model (Original)"),
+  evaluate_lm_model(robust_model_full_transformed_target_v2, "log_lbxtc", test_data_transformed_target, "LM9: Robust model (Transformed Predictors + Target)"),
+  evaluate_lm_model(robust_bisquare_model_full_transformed_target_v2, "log_lbxtc", test_data_transformed_target, "LM10: Robust model (Transformed Predictors + Target, bisquare)"),
+ evaluate_lm_model(model_transformed_newfeatures_v2,"log_lbxtc", test_data_transformed_newfeatures, "LM12: Transformed predictors and target + New features")
+)
+
+print(comparison)
+
+kable(
+  comparison,
+  caption = "Multiple Linear Regression Models",
+  digits = 4,
+  align = "c"
+)
+
+```
+
+
+## 6 Summary and Conclusion
+
+We used the 2017–2018 NHANES cycle set of key modules that capture demographic, behavioral, and clinical information relevant to predicting cholesterol and BMI outcomes. These modules include demographics, smoking status, alcohol use, physical activity, dietary intake, body measurements, blood pressure, glucose, inflammation (CRP), HDL cholesterol, triglycerides, and total cholesterol.Each dataset was imported individually and prepared for merging so that a comprehensive, unified analytic file could be created for building our regression models.
+
+
+Several continuous variables like Total calories(dr1tkcal),Total fat(dr1ttfat) ,Sodium intake(dr1tsodi), HDL(lbdhdd)  and Triglycerides(lbxtr) in the dataset exhibit skewed distributions.
+
+We addressed variables with moderate missingness by replacing with their median values, while categorical variables were imputed using the most frequent category. For variables with higher levels of missingness, we applied MICE using predictive mean matching, allowing more accurate estimation based on relationships among variables. 
+
+The most prominent outliers were concentrated in biomarkers and nutrient totals, which could influence regression models if unaddressed. These findings suggested the need for careful handling, such as log transformation or robust modeling approaches, rather than outright removal, to ensure valid and generalizable analytical results.
+
+
+To address skewness and high-end outliers in the NHANES dataset, we applied log transformations to several right-skewed variables. Specifically, CRP (lbxhscrp), triglycerides (lbxtr), total cholesterol (lbxtc), HDL cholesterol (lbdhdd), glucose (lbxglu), BMI (bmxbmi), and dietary intake variables such as total calories.
+(dr1tkcal), total fat (dr1ttfat), and sodium (dr1tsodi) were log-transformed.
+In addition to transforming skewed numeric variables, we converted key categorical variables into factor type for modeling.
+
+Checking for linear relationship across the scatterplots, we observed that the most numeric predictors exhibit very weak or negligible linear relationships with total cholesterol.This suggested that total cholesterol is largely uncorrelated with most individual predictors, with only modest positive trends observed for a few clinical measures.
+
+Strong Positive Correlations:
+ - dr1tkcal/dr1ttfat	0.89 (Calories and Total Fat Intake - more fat indicates more calories)
+ - dr1tkcal/dr1tsodi	0.80 (Calories and Total Sodium Intake - more sodium indicates more calories)
+ - dr1ttfat/dr1tsodi	0.76 (Total Fat and Sodium Intake -more fat indicates more sodium)
+ - ridageyr/bpxsy1	0.47 (Higher age indicates higher systolic bp)
+
+Negative Correlations:
+ - lbdhdd/lbxtr	-0.31 (Higher HDL, lower Triglycerides)
+ - bmxbmi/lbdhdd	-0.27 (Higher BMI, lower HDL)
+ - lbxglu/lbdhdd	-0.18 (Higher Glucose, lower HDL)
+
+Several linear regression models were built and evaluated .
+Best Performing Models is LM12( Multiple Linear regression with transformed predictors and target+ new features).
+** It has lowest RMSE (0.2041 on log scale) and highest R² = 0.1215
+** Has the best predictive performance.
+** Provides interpretable coefficients on the log scale.
+** Feature engineering is better than Regularization in this case.
+** Ridge's shrinkage couldn't compensate for missing non-linear patterns
