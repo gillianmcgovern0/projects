@@ -11,7 +11,7 @@ Regression:
     *   Collaborated with 2 peers on a multiple linear regression model using R to examine the relationship between cholesterol level and key predictors including demographic characteristics, socioeconomic status, behavioral factors, and clinical measures using the National Health and Nutrition Examination Survey (NHANES
 
 * House Price Prediction
-    *   Performed extensive EDA to produce a random forest machine learning model that explained 96% of the variance (R-squared)
+    *   Performed extensive EDA of a dataset consisting of features of residential homes in Ames, Iowa to produce a random forest machine learning model that predicted the final sale price with 96% of the variance explained (R-squared)
 
 Network Analysis:
 
